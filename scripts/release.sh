@@ -93,8 +93,10 @@ APP="dist/dmg-staging/MMetrics.app"
 [ -f "$DMG" ] || fail "DMG not produced: $DMG"
 
 codesign --verify --deep --strict "$APP"
-codesign -dv "$APP" 2>&1 | grep -q "flags=.*runtime" || fail "Hardened runtime not enabled"
-codesign -dvv "$APP" 2>&1 | grep -q "^Authority=Developer ID Application" || fail "App not signed with Developer ID"
+# Capture first: `codesign | grep -q` trips pipefail when grep exits early (SIGPIPE).
+SIG_INFO=$(codesign -dvv "$APP" 2>&1)
+grep -q "flags=.*runtime" <<< "$SIG_INFO" || fail "Hardened runtime not enabled"
+grep -q "^Authority=Developer ID Application" <<< "$SIG_INFO" || fail "App not signed with Developer ID"
 [ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")" = "$VERSION" ] \
     || fail "App version does not match $VERSION"
 ok "Signed with Developer ID, hardened runtime on"
