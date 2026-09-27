@@ -396,7 +396,7 @@ private enum MenuBarLabel {
     private static let height: CGFloat = 22
     private static let cellPadding: CGFloat = 5
     private static let valueAttrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.systemFont(ofSize: 11.5, weight: .medium),
+        .font: NSFont.systemFont(ofSize: 11, weight: .medium),
         .foregroundColor: NSColor.black,
     ]
     private static let labelAttrs: [NSAttributedString.Key: Any] = [
