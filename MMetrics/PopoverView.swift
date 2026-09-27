@@ -37,7 +37,6 @@ struct PopoverView: View {
                 SectionIf(.memory) { MemorySection(model: model) }
                 SectionIf(.battery) { BatterySection(model: model) }
                 NetworkDiskSection(model: model)
-                SectionIf(.power) { PowerSection(model: model) }
                 SectionIf(.processes) { ProcessSection(model: model) }
             }
         }
@@ -108,10 +107,10 @@ private struct Header: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(String(format: "%.1f W", model.totalPower))
+                Text(model.sysPower > 0 ? String(format: "%.1f W", model.sysPower) : "--")
                     .font(.system(size: 13, weight: .medium, design: .monospaced))
                     .foregroundColor(.primary)
-                Text("total power")
+                Text("system power")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
             }
@@ -361,44 +360,6 @@ private struct IORow: View {
                 .foregroundColor(.primary)
             Spacer()
         }
-    }
-}
-
-// MARK: - Power rails
-
-private struct PowerSection: View {
-    @ObservedObject var model: SystemStatsModel
-    var body: some View {
-        SectionBox(icon: "bolt.fill", title: "Power Rails") {
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 5) {
-                PowerTile(label: "CPU",   val: model.cpuPower)
-                PowerTile(label: "GPU",   val: model.gpuPower)
-                if model.socEnergyAvailable {
-                    PowerTile(label: "ANE",   val: model.anePower)
-                    PowerTile(label: "DRAM",  val: model.dramPower)
-                }
-                PowerTile(label: "SYS",   val: model.sysPower)
-                PowerTile(label: "TOTAL", val: model.totalPower, highlight: true)
-            }
-        }
-    }
-}
-
-private struct PowerTile: View {
-    let label: String; let val: Double; var highlight: Bool = false
-    var body: some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(highlight ? Color(hex:"FFD60A") : Color(hex:"888899"))
-            Spacer()
-            Text(String(format: val >= 1 ? "%.2f W" : "%.3f W", val))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(highlight ? Color(hex:"FFD60A") : .primary)
-        }
-        .padding(.horizontal, 8).padding(.vertical, 5)
-        .background(Color.primary.opacity(highlight ? 0.07 : 0.03))
-        .cornerRadius(6)
     }
 }
 

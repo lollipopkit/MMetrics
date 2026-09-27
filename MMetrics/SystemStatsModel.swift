@@ -38,7 +38,7 @@ struct CPUTier: Equatable {
 /// Dashboard sections the user can hide in Settings. Sections with their own sampling
 /// cost (processes, network, disk, battery) also stop sampling while hidden.
 enum DashboardSection: String, CaseIterable, Identifiable {
-    case cpu, gpu, fan, memory, battery, network, disk, power, processes
+    case cpu, gpu, fan, memory, battery, network, disk, processes
 
     var id: String { rawValue }
 
@@ -51,7 +51,6 @@ enum DashboardSection: String, CaseIterable, Identifiable {
         case .battery:   return "Battery"
         case .network:   return "Network"
         case .disk:      return "Disk I/O"
-        case .power:     return "Power Rails"
         case .processes: return "Top Processes"
         }
     }
@@ -134,13 +133,8 @@ class SystemStatsModel: ObservableObject {
     @Published var gpuTemp:     Double  = 0
     @Published var gpuPower:    Double  = 0
 
-    // Power rails
-    @Published var anePower:    Double  = 0
-    @Published var dramPower:   Double  = 0
-    /// False when the chip does not expose ANE/DRAM energy; the UI hides those rails.
-    @Published var socEnergyAvailable = true
+    /// Whole-board power (SMC PSTR).
     @Published var sysPower:    Double  = 0
-    @Published var totalPower:  Double  = 0
     @Published var dramBW:      Double  = 0
     @Published var dramBWAvailable = true
 
@@ -562,12 +556,8 @@ class SystemStatsModel: ObservableObject {
                 
                 self.cpuPower  = pData.cpuPower
                 self.gpuPower  = pData.gpuPower
-                self.anePower  = pData.anePower
-                self.dramPower = pData.dramPower
-                self.socEnergyAvailable = pData.socEnergyAvailable
                 // systemPower: prefer SMC PSTR (wall input power); IOReport doesn't expose it
                 self.sysPower  = sysP > 0 ? sysP : (pData.systemPower > 0 ? pData.systemPower : 0)
-                self.totalPower = self.cpuPower + self.gpuPower + self.anePower + self.dramPower
 
                 self.gpuUsage  = Int(pData.gpuUsage.rounded())
                 self.gpuMHz    = Int(pData.gpuFreqMHz)

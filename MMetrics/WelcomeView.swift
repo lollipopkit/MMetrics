@@ -95,7 +95,7 @@ private struct StepWelcome: View {
                 Feature(icon: "cpu",              label: "Per-core CPU")
                 Feature(icon: "rectangle.3.group",label: "GPU + temps")
                 Feature(icon: "battery.75percent",label: "Full battery")
-                Feature(icon: "bolt.fill",        label: "Power rails")
+                Feature(icon: "bolt.fill",        label: "Power")
             }
         }
         .padding(.horizontal, 40)
@@ -155,7 +155,7 @@ private struct StepPermission: View {
                 PermRow(icon: "rectangle.3.group",color: "BF5AF2",
                         title: "GPU & Temps",     desc: "Native SMC + IOReport sensors — no third-party dependencies.")
                 PermRow(icon: "bolt.fill",        color: "FFD60A",
-                        title: "Power rails",     desc: "ANE, DRAM, GPU SRAM, total system power.")
+                        title: "Power",           desc: "CPU, GPU and whole-system power.")
                 PermRow(icon: "battery.75percent",color: "30D158",
                         title: "Battery",         desc: "Cycle count, health, charge rate, adapter watts.")
             }
