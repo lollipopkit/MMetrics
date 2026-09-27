@@ -9,8 +9,8 @@
 #   brew upgrade --cask mmetrics
 
 cask "mmetrics" do
-  version "2.0.5"
-  sha256 "750099ac6ac1d432bcde06a89494b637980de3ed54b5fc828abd03b59c6382a8"
+  version "1.0.0"
+  sha256 "74b9347d0be3470fceb95cb98a6991ce80b3ef130f41a052e492f8bc1a446b4b"
 
   url "https://github.com/lollipopkit/mac-power-metric/releases/download/v#{version}/MMetrics-#{version}.dmg"
   name "MMetrics"
