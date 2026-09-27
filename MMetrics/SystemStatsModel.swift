@@ -14,10 +14,109 @@ struct ProcInfo: Identifiable {
     let mem:  Int64
 }
 
+// MARK: - CPU tiers
+
+struct CPUTier: Equatable {
+    enum Kind {
+        case efficiency, performance, `super`
+
+        init(perfLevelName: String) {
+            switch perfLevelName {
+            case "Efficiency": self = .efficiency
+            case "Super":      self = .super
+            default:           self = .performance
+            }
+        }
+    }
+
+    let kind: Kind
+    let cores: Int
+}
+
+// MARK: - Dashboard sections
+
+/// Dashboard sections the user can hide in Settings. Sections with their own sampling
+/// cost (processes, network, disk, battery) also stop sampling while hidden.
+enum DashboardSection: String, CaseIterable, Identifiable {
+    case cpu, gpu, fan, memory, battery, network, disk, power, processes
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .cpu:       return "CPU"
+        case .gpu:       return "GPU"
+        case .fan:       return "Fan"
+        case .memory:    return "Memory"
+        case .battery:   return "Battery"
+        case .network:   return "Network"
+        case .disk:      return "Disk I/O"
+        case .power:     return "Power Rails"
+        case .processes: return "Top Processes"
+        }
+    }
+
+    var defaultsKey: String { "section.\(rawValue).enabled" }
+
+    /// Thread-safe; read from the sampler queues.
+    var isEnabled: Bool { UserDefaults.standard.bool(forKey: defaultsKey) }
+
+    static var registrationDefaults: [String: Any] {
+        Dictionary(uniqueKeysWithValues: allCases.map { ($0.defaultsKey, true) })
+    }
+}
+
+// MARK: - Menu bar items
+
+/// Metrics the user can show in the menu bar, in display order.
+enum MenuBarItem: String, CaseIterable, Identifiable {
+    case cpu, memory, gpu, temperature, power, netDown, netUp
+
+    var id: String { rawValue }
+
+    /// Name in Settings.
+    var title: String {
+        switch self {
+        case .cpu:         return "CPU"
+        case .memory:      return "Memory"
+        case .gpu:         return "GPU"
+        case .temperature: return "CPU Temp"
+        case .power:       return "System Power"
+        case .netDown:     return "Download"
+        case .netUp:       return "Upload"
+        }
+    }
+
+    /// Caption under the value in the menu bar.
+    var caption: String {
+        switch self {
+        case .cpu:         return "CPU"
+        case .memory:      return "MEM"
+        case .gpu:         return "GPU"
+        case .temperature: return "TEMP"
+        case .power:       return "PWR"
+        case .netDown:     return "NET ↓"
+        case .netUp:       return "NET ↑"
+        }
+    }
+
+    var defaultsKey: String { "menubar.\(rawValue).enabled" }
+
+    var isEnabled: Bool { UserDefaults.standard.bool(forKey: defaultsKey) }
+
+    static var enabledItems: [MenuBarItem] { allCases.filter(\.isEnabled) }
+
+    static var registrationDefaults: [String: Any] {
+        Dictionary(uniqueKeysWithValues: allCases.map {
+            ($0.defaultsKey, [.cpu, .memory, .temperature].contains($0))
+        })
+    }
+}
+
 // MARK: - Model
 
 class SystemStatsModel: ObservableObject {
-    private static let logger = Logger(subsystem: "rybo.Macmonitor", category: "metrics")
+    private static let logger = Logger(subsystem: "com.lollipopkit.MMetrics", category: "metrics")
 
     // CPU
     @Published var cpuUsage:    Int     = 0
@@ -38,11 +137,13 @@ class SystemStatsModel: ObservableObject {
     // Power rails
     @Published var anePower:    Double  = 0
     @Published var dramPower:   Double  = 0
+    /// False when the chip does not expose ANE/DRAM energy; the UI hides those rails.
+    @Published var socEnergyAvailable = true
     @Published var sysPower:    Double  = 0
     @Published var totalPower:  Double  = 0
     @Published var dramBW:      Double  = 0
+    @Published var dramBWAvailable = true
 
-    // M5+ Super cluster (exposed so PopoverView can show it when present)
     @Published var sClusterPct: Int     = 0
     @Published var sClusterMHz: Int     = 0
 
@@ -79,8 +180,8 @@ class SystemStatsModel: ObservableObject {
     // System info
     @Published var thermalState: String = "Normal"
     @Published var chipName:     String = "Apple Silicon"  // e.g. "M2", "M2 Pro", "M2 Max"
-    @Published var eCoreCount:   Int    = 0
-    @Published var pCoreCount:   Int    = 0
+    /// CPU perf levels ordered lowest tier first, matching logical CPU index order.
+    @Published var cpuTiers:     [CPUTier] = []
     @Published var gpuCoreCount: Int    = 0
 
     // Fan (0 = fanless model, e.g. MacBook Air)
@@ -92,7 +193,6 @@ class SystemStatsModel: ObservableObject {
 
     @Published var topProcs: [ProcInfo] = []
     @Published var nativeReady           = false
-    @Published var helperMissing         = false
 
     // Private
     private var smcConn: io_connect_t     = 0
@@ -109,9 +209,9 @@ class SystemStatsModel: ObservableObject {
     private var batterySampleCountdown    = 0
     private var timer: Timer?
     private var diskTimer: Timer?          // independent timer — keeps ioreg off samplerQueue
-    private let samplerQueue = DispatchQueue(label: "rybo.Macmonitor.sampler", qos: .utility)
-    private let helperPath = "/Users/Shared/MacMonitor/macmonitor-helper"
-    private let helperSudoersPath = "/etc/sudoers.d/macmonitor-helper"
+    private let samplerQueue = DispatchQueue(label: "com.lollipopkit.MMetrics.sampler", qos: .utility)
+    private let helperPath = "/Users/Shared/MMetrics/mmetrics-helper"
+    private let helperSudoersPath = "/etc/sudoers.d/mmetrics-helper"
     private var helperBootstrapInFlight = false
 
     // MARK: - Start
@@ -142,7 +242,7 @@ class SystemStatsModel: ObservableObject {
 
         ensurePrivilegedHelperAccess()
         fetchNativeMetrics()
-        fetchBattery()
+        if DashboardSection.battery.isEnabled { fetchBattery() }
     }
 
     // MARK: - Tick
@@ -160,24 +260,37 @@ class SystemStatsModel: ObservableObject {
             let (cpu, cores) = self.sampleCPU()
             let (mUsed, mTot) = self.sampleMemory()
             let (sUsed, sTot) = self.sampleSwap()
-            let (ni, no)      = self.netCumulative()
 
             let dt     = max(Date().timeIntervalSince(self.prevTickTime), 0.001)
-            // Guard against first tick where prevNetIn is 0 (unseeded).
-            // That would make inBps = totalBytesSinceBoot / 2s — wildly wrong.
-            let netSeeded = self.prevNetIn > 0
-            let inBps  = netSeeded ? Int64(Double(ni - self.prevNetIn)  / dt) : 0
-            let outBps = netSeeded ? Int64(Double(no - self.prevNetOut) / dt) : 0
-            self.prevNetIn    = ni
-            self.prevNetOut   = no
+            var inBps: Int64 = 0, outBps: Int64 = 0
+            if Self.networkSamplingNeeded {
+                let (ni, no) = self.netCumulative()
+                // Guard against first tick where prevNetIn is 0 (unseeded).
+                // That would make inBps = totalBytesSinceBoot / 2s — wildly wrong.
+                if self.prevNetIn > 0 {
+                    inBps  = Int64(Double(ni - self.prevNetIn)  / dt)
+                    outBps = Int64(Double(no - self.prevNetOut) / dt)
+                }
+                self.prevNetIn  = ni
+                self.prevNetOut = no
+            } else {
+                // Reseed when re-enabled so the first rate isn't the whole hidden interval.
+                self.prevNetIn  = 0
+                self.prevNetOut = 0
+            }
             self.prevTickTime = Date()
 
             // Disk I/O is handled by diskTimer (every 6 s) on a background queue
             // to avoid ioreg blocking samplerQueue. Nothing to do here.
 
-            self.batterySampleCountdown -= 1
-            let shouldFetchBattery = self.batterySampleCountdown <= 0
-            if shouldFetchBattery { self.batterySampleCountdown = 5 }
+            var shouldFetchBattery = false
+            if DashboardSection.battery.isEnabled {
+                self.batterySampleCountdown -= 1
+                shouldFetchBattery = self.batterySampleCountdown <= 0
+                if shouldFetchBattery { self.batterySampleCountdown = 5 }
+            } else {
+                self.batterySampleCountdown = 0   // fetch on the first tick after re-enabling
+            }
 
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
@@ -198,6 +311,10 @@ class SystemStatsModel: ObservableObject {
         }
     }
 
+    private static var networkSamplingNeeded: Bool {
+        DashboardSection.network.isEnabled || MenuBarItem.netDown.isEnabled || MenuBarItem.netUp.isEnabled
+    }
+
     // MARK: - Disk I/O (independent timer — never blocks samplerQueue)
 
     // Called from diskTimer on the main thread every 6 s.
@@ -207,6 +324,12 @@ class SystemStatsModel: ObservableObject {
         // Guard: ioreg can take longer than the 6 s timer interval.
         // Without this, concurrent ioreg processes pile up and waste CPU/memory.
         guard !diskInFlight else { return }
+        guard DashboardSection.disk.isEnabled else {
+            diskSeeded = false   // reseed when re-enabled
+            diskReadKBs = 0
+            diskWriteKBs = 0
+            return
+        }
         diskInFlight = true
 
         let prevRead  = prevDiskReadBytes
@@ -427,8 +550,8 @@ class SystemStatsModel: ObservableObject {
             let helperData = self.fetchHelperMetrics()
             let pData = self.mergeMetrics(primary: helperData, fallback: nativeData)
             let sysP = SMCGetFloatValue(self.smcConn, "PSTR")
-            let procs = self.sampleTopProcesses()
-            fputs("[metrics] cpuTemp=\(pData.cpuTemp) gpuTemp=\(pData.gpuTemp) cpuPow=\(pData.cpuPower) gpuPow=\(pData.gpuPower) gpuPct=\(pData.gpuUsage) gpuMHz=\(pData.gpuFreqMHz) ePct=\(pData.eClusterActive) eMHz=\(pData.eClusterFreqMHz) pPct=\(pData.pClusterActive) pMHz=\(pData.pClusterFreqMHz) dramR=\(pData.dramReadBytes) dramW=\(pData.dramWriteBytes)\n", stderr)
+            let procs = DashboardSection.processes.isEnabled ? self.sampleTopProcesses() : []
+            fputs("[metrics] cpuTemp=\(pData.cpuTemp) gpuTemp=\(pData.gpuTemp) cpuPow=\(pData.cpuPower) gpuPow=\(pData.gpuPower) gpuPct=\(pData.gpuUsage) gpuMHz=\(pData.gpuFreqMHz) ePct=\(pData.eClusterActive) eMHz=\(pData.eClusterFreqMHz) pPct=\(pData.pClusterActive) pMHz=\(pData.pClusterFreqMHz) sPct=\(pData.sClusterActive) sMHz=\(pData.sClusterFreqMHz) soc=\(pData.socEnergyAvailable) dramBW=\(pData.dramBandwidthAvailable) dramR=\(pData.dramReadBytes) dramW=\(pData.dramWriteBytes)\n", stderr)
 
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
@@ -441,6 +564,7 @@ class SystemStatsModel: ObservableObject {
                 self.gpuPower  = pData.gpuPower
                 self.anePower  = pData.anePower
                 self.dramPower = pData.dramPower
+                self.socEnergyAvailable = pData.socEnergyAvailable
                 // systemPower: prefer SMC PSTR (wall input power); IOReport doesn't expose it
                 self.sysPower  = sysP > 0 ? sysP : (pData.systemPower > 0 ? pData.systemPower : 0)
                 self.totalPower = self.cpuPower + self.gpuPower + self.anePower + self.dramPower
@@ -457,11 +581,11 @@ class SystemStatsModel: ObservableObject {
                 // DRAM bandwidth: bytes transferred / sample interval (0.1 s) → GB/s
                 let totalDramBytes = pData.dramReadBytes + pData.dramWriteBytes
                 self.dramBW = Double(totalDramBytes) / 0.1 / 1_000_000_000
+                self.dramBWAvailable = pData.dramBandwidthAvailable
 
                 self.topProcs = procs
 
                 self.nativeReady    = true
-                self.helperMissing  = false
             }
         }
     }
@@ -481,7 +605,7 @@ class SystemStatsModel: ObservableObject {
             let path  = String(parts[3])
             let name  = (path as NSString).lastPathComponent
             
-            if name == "kernel_task" || name.lowercased().contains("macmonitor") { continue }
+            if name == "kernel_task" || name.lowercased().contains("mmetrics") { continue }
             
             results.append(ProcInfo(
                 pid: pid,
@@ -543,9 +667,13 @@ class SystemStatsModel: ObservableObject {
         result.pClusterActive  = dbl("pClusterActive")
         result.eClusterFreqMHz = i32("eClusterFreqMHz")
         result.pClusterFreqMHz = i32("pClusterFreqMHz")
+        result.sClusterActive  = dbl("sClusterActive")
+        result.sClusterFreqMHz = i32("sClusterFreqMHz")
         result.dramReadBytes   = i64("dramReadBytes")
         result.dramWriteBytes  = i64("dramWriteBytes")
         result.fanRPM          = i32("fanRPM")
+        result.socEnergyAvailable = (payload["socEnergyAvailable"] as? NSNumber)?.boolValue ?? false
+        result.dramBandwidthAvailable = (payload["dramBandwidthAvailable"] as? NSNumber)?.boolValue ?? false
         return result
     }
 
@@ -605,6 +733,8 @@ class SystemStatsModel: ObservableObject {
         if primary.dramWriteBytes > 0  { merged.dramWriteBytes  = primary.dramWriteBytes }
         if primary.cpuDieHotspot > 0   { merged.cpuDieHotspot   = primary.cpuDieHotspot }
         if primary.fanRPM > 0          { merged.fanRPM          = primary.fanRPM }
+        if primary.socEnergyAvailable  { merged.socEnergyAvailable = true }
+        if primary.dramBandwidthAvailable { merged.dramBandwidthAvailable = true }
         return merged
     }
 
@@ -615,60 +745,23 @@ class SystemStatsModel: ObservableObject {
             ?? Self.sysctlString("hw.model")
             ?? "Apple Silicon"
         let chip = rawBrand.hasPrefix("Apple ") ? String(rawBrand.dropFirst(6)) : rawBrand
-        let eCores = Self.sysctlInt("hw.perflevel0.physicalcpu")
-        let pCores = Self.sysctlInt("hw.perflevel1.physicalcpu")
+        let tiers = Self.loadCPUTiers()
         let gpuCores = Self.detectGPUCoreCount()
         let thermal = Self.currentThermalState()
 
         DispatchQueue.main.async {
             self.chipName = chip
-            self.eCoreCount = eCores
-            self.pCoreCount = pCores > 0 ? pCores : max(0, ProcessInfo.processInfo.processorCount - eCores)
+            self.cpuTiers = tiers
             self.gpuCoreCount = gpuCores
             self.thermalState = thermal
         }
     }
 
-    // MARK: - Optimize
-
-    func optimize() {
-        DispatchQueue.global(qos: .background).async {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
-            p.arguments = ["purge"]
-            p.standardError = Pipe()
-            try? p.run(); p.waitUntilExit()
-        }
-
-        let heavyApps = NSWorkspace.shared.runningApplications.filter {
-            $0.activationPolicy == .regular && !$0.isTerminated
-        }
-        var candidates: [(app: NSRunningApplication, memMB: Int)] = []
-        for proc in topProcs {
-            if let app = heavyApps.first(where: { Int($0.processIdentifier) == proc.pid }) {
-                let mb = Int(proc.mem / 1_048_576)
-                if mb > 250 { candidates.append((app, mb)) }
-            }
-        }
-
-        DispatchQueue.main.async {
-            guard !candidates.isEmpty else {
-                let a = NSAlert()
-                a.messageText = "System looks healthy"
-                a.informativeText = "No heavy user apps found.\nDisk cache has been purged."
-                a.runModal(); return
-            }
-            let names = candidates.map { "\($0.app.localizedName ?? "?")  (\($0.memMB) MB)" }
-                                  .joined(separator: "\n")
-            let alert = NSAlert()
-            alert.messageText = "Heavy Apps Found"
-            alert.informativeText = "These apps are using significant RAM:\n\n\(names)\n\nQuit them?"
-            alert.addButton(withTitle: "Quit All")
-            alert.addButton(withTitle: "Cancel")
-            alert.alertStyle = .warning
-            if alert.runModal() == .alertFirstButtonReturn {
-                candidates.forEach { $0.app.terminate() }
-            }
+    func clusterStats(_ kind: CPUTier.Kind) -> (pct: Int, mhz: Int) {
+        switch kind {
+        case .efficiency:  return (eCoresPct, eCoresMHz)
+        case .performance: return (pCoresPct, pCoresMHz)
+        case .super:       return (sClusterPct, sClusterMHz)
         }
     }
 
@@ -731,6 +824,15 @@ private extension SystemStatsModel {
         case .serious: return "Serious"
         case .critical: return "Critical"
         @unknown default: return "Normal"
+        }
+    }
+
+    /// hw.perflevel0 is the fastest tier; logical CPUs are numbered from the slowest tier up.
+    static func loadCPUTiers() -> [CPUTier] {
+        (0..<sysctlInt("hw.nperflevels")).reversed().compactMap { i in
+            let cores = sysctlInt("hw.perflevel\(i).physicalcpu")
+            guard cores > 0 else { return nil }
+            return CPUTier(kind: .init(perfLevelName: sysctlString("hw.perflevel\(i).name") ?? ""), cores: cores)
         }
     }
 

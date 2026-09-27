@@ -1,6 +1,6 @@
 #import <Foundation/Foundation.h>
-#import "../Macmonitor/IOReportWrapper.h"
-#import "../Macmonitor/SMC.h"
+#import "../MMetrics/IOReportWrapper.h"
+#import "../MMetrics/SMC.h"
 
 static NSDictionary *collectMetrics(void) {
     io_connect_t conn = SMCOpen();
@@ -24,9 +24,13 @@ static NSDictionary *collectMetrics(void) {
         @"pClusterActive": @(data.pClusterActive),
         @"eClusterFreqMHz": @(data.eClusterFreqMHz),
         @"pClusterFreqMHz": @(data.pClusterFreqMHz),
+        @"sClusterActive": @(data.sClusterActive),
+        @"sClusterFreqMHz": @(data.sClusterFreqMHz),
         @"dramReadBytes": @(data.dramReadBytes),
         @"dramWriteBytes": @(data.dramWriteBytes),
-        @"fanRPM": @(data.fanRPM)
+        @"fanRPM": @(data.fanRPM),
+        @"socEnergyAvailable": @(data.socEnergyAvailable),
+        @"dramBandwidthAvailable": @(data.dramBandwidthAvailable)
     };
 }
 

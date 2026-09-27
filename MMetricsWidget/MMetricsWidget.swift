@@ -131,7 +131,7 @@ struct StatsProvider: TimelineProvider {
 
 // MARK: - Widget views
 
-struct MacMonitorWidgetView: View {
+struct MMetricsWidgetView: View {
     let entry: StatsEntry
     @Environment(\.widgetFamily) var family
 
@@ -154,7 +154,7 @@ struct SmallView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 5) {
                 Circle().fill(dotColor(e.thermal)).frame(width: 7, height: 7)
-                Text("MacMonitor")
+                Text("MMetrics")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.primary)
                 Spacer(minLength: 0)
@@ -183,14 +183,6 @@ struct SmallView: View {
                 Text(e.date, style: .time)
                     .font(.system(size: 10)).foregroundColor(.secondary)
             }
-
-            Spacer(minLength: 6)
-
-            Link(destination: URL(string: "https://razorpay.me/@ryyansafar")!) {
-                Text("by ryyansafar · support ♥")
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary)
-            }
         }
         .padding(12)
     }
@@ -210,7 +202,7 @@ struct MediumView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 5) {
                     Circle().fill(dotColor(e.thermal)).frame(width: 7, height: 7)
-                    Text("MacMonitor")
+                    Text("MMetrics")
                         .font(.system(size: 12, weight: .bold)).foregroundColor(.primary)
                     Spacer(minLength: 0)
                 }
@@ -245,14 +237,6 @@ struct MediumView: View {
                 InfoRow(label: "RAM total", val: e.memTotal,  color: .secondary)
                 Spacer(minLength: 8)
                 InfoRow(label: "CPU load",  val: "\(e.cpu)%", color: barColor(e.cpu))
-
-                Spacer(minLength: 10)
-
-                Link(destination: URL(string: "https://razorpay.me/@ryyansafar")!) {
-                    Text("by ryyansafar · support ♥")
-                        .font(.system(size: 9))
-                        .foregroundColor(.secondary)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -359,14 +343,14 @@ private extension View {
 // MARK: - Widget declaration
 
 @main
-struct MacMonitorWidget: Widget {
-    let kind = "MacMonitorWidget"
+struct MMetricsWidget: Widget {
+    let kind = "MMetricsWidget"
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: StatsProvider()) { entry in
-            MacMonitorWidgetView(entry: entry)
+            MMetricsWidgetView(entry: entry)
                 .widgetContainerBackground()
         }
-        .configurationDisplayName("MacMonitor")
+        .configurationDisplayName("MMetrics")
         .description("Live CPU & memory — works standalone")
         .supportedFamilies([.systemSmall, .systemMedium])
     }

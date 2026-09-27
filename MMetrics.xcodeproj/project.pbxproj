@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		12987DFC7BD99C87151D21BC /* MacMonitorWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B61A8F79BCA099885B02D3FC /* MacMonitorWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		1B96ECCB5FD6A6C233AABEB8 /* MacMonitorWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACDF3862610B203F992E0B2 /* MacMonitorWidget.swift */; };
+		12987DFC7BD99C87151D21BC /* MMetricsWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B61A8F79BCA099885B02D3FC /* MMetricsWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		1B96ECCB5FD6A6C233AABEB8 /* MMetricsWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ACDF3862610B203F992E0B2 /* MMetricsWidget.swift */; };
 		606C7E022F77A8C500F11BF3 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 606C7E032F77A8C500F11BF3 /* IOKit.framework */; };
 		890119AF7DE293970D5711EC /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CCFCE42EF5D6695CFBD60D6D /* WidgetKit.framework */; };
 		B791BEEB1035C35B874E78B4 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CFC155416A4FAEBABB0BDB56 /* SwiftUI.framework */; };
@@ -21,7 +21,7 @@
 			containerPortal = 606C7DEC2F77A8C200F11BF3 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = F98850C00926870D3CE80FD1;
-			remoteInfo = MacMonitorWidget;
+			remoteInfo = MMetricsWidget;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -32,7 +32,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				12987DFC7BD99C87151D21BC /* MacMonitorWidget.appex in Embed App Extensions */,
+				12987DFC7BD99C87151D21BC /* MMetricsWidget.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -40,23 +40,23 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0ACDF3862610B203F992E0B2 /* MacMonitorWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MacMonitorWidget.swift; sourceTree = "<group>"; };
-		1CB36D9432E22CC9C1F884E2 /* MacMonitorWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MacMonitorWidget.entitlements; sourceTree = "<group>"; };
-		606C7DF42F77A8C200F11BF3 /* Macmonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Macmonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0ACDF3862610B203F992E0B2 /* MMetricsWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MMetricsWidget.swift; sourceTree = "<group>"; };
+		1CB36D9432E22CC9C1F884E2 /* MMetricsWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MMetricsWidget.entitlements; sourceTree = "<group>"; };
+		606C7DF42F77A8C200F11BF3 /* MMetrics.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MMetrics.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		606C7E032F77A8C500F11BF3 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		6280EF9467BE86AA3D988C7A /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/Cocoa.framework; sourceTree = DEVELOPER_DIR; };
-		B61A8F79BCA099885B02D3FC /* MacMonitorWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MacMonitorWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B61A8F79BCA099885B02D3FC /* MMetricsWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MMetricsWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CCFCE42EF5D6695CFBD60D6D /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/WidgetKit.framework; sourceTree = DEVELOPER_DIR; };
 		CFC155416A4FAEBABB0BDB56 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.0.sdk/System/Library/Frameworks/SwiftUI.framework; sourceTree = DEVELOPER_DIR; };
 		E16BE2031BE5770D24B52192 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		606C7DF62F77A8C200F11BF3 /* Macmonitor */ = {
+		606C7DF62F77A8C200F11BF3 /* MMetrics */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 			);
-			path = Macmonitor;
+			path = MMetrics;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -86,18 +86,18 @@
 		606C7DEB2F77A8C200F11BF3 = {
 			isa = PBXGroup;
 			children = (
-				606C7DF62F77A8C200F11BF3 /* Macmonitor */,
+				606C7DF62F77A8C200F11BF3 /* MMetrics */,
 				606C7DF52F77A8C200F11BF3 /* Products */,
 				606C7E042F77A8C500F11BF3 /* Frameworks */,
-				AB4671716CF35D9350EA0139 /* MacMonitorWidget */,
+				AB4671716CF35D9350EA0139 /* MMetricsWidget */,
 			);
 			sourceTree = "<group>";
 		};
 		606C7DF52F77A8C200F11BF3 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				606C7DF42F77A8C200F11BF3 /* Macmonitor.app */,
-				B61A8F79BCA099885B02D3FC /* MacMonitorWidget.appex */,
+				606C7DF42F77A8C200F11BF3 /* MMetrics.app */,
+				B61A8F79BCA099885B02D3FC /* MMetricsWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -121,23 +121,23 @@
 			name = "OS X";
 			sourceTree = "<group>";
 		};
-		AB4671716CF35D9350EA0139 /* MacMonitorWidget */ = {
+		AB4671716CF35D9350EA0139 /* MMetricsWidget */ = {
 			isa = PBXGroup;
 			children = (
-				0ACDF3862610B203F992E0B2 /* MacMonitorWidget.swift */,
+				0ACDF3862610B203F992E0B2 /* MMetricsWidget.swift */,
 				E16BE2031BE5770D24B52192 /* Info.plist */,
-				1CB36D9432E22CC9C1F884E2 /* MacMonitorWidget.entitlements */,
+				1CB36D9432E22CC9C1F884E2 /* MMetricsWidget.entitlements */,
 			);
-			name = MacMonitorWidget;
-			path = MacMonitorWidget;
+			name = MMetricsWidget;
+			path = MMetricsWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		606C7DF32F77A8C200F11BF3 /* Macmonitor */ = {
+		606C7DF32F77A8C200F11BF3 /* MMetrics */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 606C7DFF2F77A8C400F11BF3 /* Build configuration list for PBXNativeTarget "Macmonitor" */;
+			buildConfigurationList = 606C7DFF2F77A8C400F11BF3 /* Build configuration list for PBXNativeTarget "MMetrics" */;
 			buildPhases = (
 				606C7DF02F77A8C200F11BF3 /* Sources */,
 				606C7DF12F77A8C200F11BF3 /* Frameworks */,
@@ -150,16 +150,16 @@
 				07033FF1E82C96790AABCC85 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				606C7DF62F77A8C200F11BF3 /* Macmonitor */,
+				606C7DF62F77A8C200F11BF3 /* MMetrics */,
 			);
-			name = Macmonitor;
-			productName = Macmonitor;
-			productReference = 606C7DF42F77A8C200F11BF3 /* Macmonitor.app */;
+			name = MMetrics;
+			productName = MMetrics;
+			productReference = 606C7DF42F77A8C200F11BF3 /* MMetrics.app */;
 			productType = "com.apple.product-type.application";
 		};
-		F98850C00926870D3CE80FD1 /* MacMonitorWidget */ = {
+		F98850C00926870D3CE80FD1 /* MMetricsWidget */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 77A70C4283EC735F10E3ED3F /* Build configuration list for PBXNativeTarget "MacMonitorWidget" */;
+			buildConfigurationList = 77A70C4283EC735F10E3ED3F /* Build configuration list for PBXNativeTarget "MMetricsWidget" */;
 			buildPhases = (
 				B25040147B1276ECAF535187 /* Sources */,
 				BB68B526A0245C80736A8F2E /* Frameworks */,
@@ -169,9 +169,9 @@
 			);
 			dependencies = (
 			);
-			name = MacMonitorWidget;
-			productName = MacMonitorWidget;
-			productReference = B61A8F79BCA099885B02D3FC /* MacMonitorWidget.appex */;
+			name = MMetricsWidget;
+			productName = MMetricsWidget;
+			productReference = B61A8F79BCA099885B02D3FC /* MMetricsWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -189,7 +189,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 606C7DEF2F77A8C200F11BF3 /* Build configuration list for PBXProject "Macmonitor" */;
+			buildConfigurationList = 606C7DEF2F77A8C200F11BF3 /* Build configuration list for PBXProject "MMetrics" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -203,8 +203,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				606C7DF32F77A8C200F11BF3 /* Macmonitor */,
-				F98850C00926870D3CE80FD1 /* MacMonitorWidget */,
+				606C7DF32F77A8C200F11BF3 /* MMetrics */,
+				F98850C00926870D3CE80FD1 /* MMetricsWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -238,7 +238,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1B96ECCB5FD6A6C233AABEB8 /* MacMonitorWidget.swift in Sources */,
+				1B96ECCB5FD6A6C233AABEB8 /* MMetricsWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -247,8 +247,8 @@
 /* Begin PBXTargetDependency section */
 		07033FF1E82C96790AABCC85 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			name = MacMonitorWidget;
-			target = F98850C00926870D3CE80FD1 /* MacMonitorWidget */;
+			name = MMetricsWidget;
+			target = F98850C00926870D3CE80FD1 /* MMetricsWidget */;
 			targetProxy = 599D2D0E9588CC094361E5E8 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -257,15 +257,15 @@
 		5E53A443C86E14995474F627 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = MacMonitorWidget/MacMonitorWidget.entitlements;
+				CODE_SIGN_ENTITLEMENTS = MMetricsWidget/MMetricsWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = C287WU2H3P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = MacMonitorWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MacMonitor;
+				INFOPLIST_FILE = MMetricsWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MMetrics;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -273,7 +273,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 2.0.5;
-				PRODUCT_BUNDLE_IDENTIFIER = rybo.Macmonitor.MacMonitorWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lollipopkit.MMetrics.MMetricsWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -426,14 +426,14 @@
 					"$(inherited)",
 					"-lIOReport",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = rybo.Macmonitor;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lollipopkit.MMetrics;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Macmonitor/MacMonitor-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "MMetrics/MMetrics-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -463,14 +463,14 @@
 					"$(inherited)",
 					"-lIOReport",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = rybo.Macmonitor;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lollipopkit.MMetrics;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "Macmonitor/MacMonitor-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "MMetrics/MMetrics-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -479,15 +479,15 @@
 		6283E79DD601733402E1802F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = MacMonitorWidget/MacMonitorWidget.entitlements;
+				CODE_SIGN_ENTITLEMENTS = MMetricsWidget/MMetricsWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = C287WU2H3P;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = MacMonitorWidget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = MacMonitor;
+				INFOPLIST_FILE = MMetricsWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MMetrics;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -495,7 +495,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 2.0.5;
-				PRODUCT_BUNDLE_IDENTIFIER = rybo.Macmonitor.MacMonitorWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lollipopkit.MMetrics.MMetricsWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -507,7 +507,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		606C7DEF2F77A8C200F11BF3 /* Build configuration list for PBXProject "Macmonitor" */ = {
+		606C7DEF2F77A8C200F11BF3 /* Build configuration list for PBXProject "MMetrics" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				606C7DFD2F77A8C400F11BF3 /* Debug */,
@@ -516,7 +516,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		606C7DFF2F77A8C400F11BF3 /* Build configuration list for PBXNativeTarget "Macmonitor" */ = {
+		606C7DFF2F77A8C400F11BF3 /* Build configuration list for PBXNativeTarget "MMetrics" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				606C7E002F77A8C400F11BF3 /* Debug */,
@@ -525,7 +525,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		77A70C4283EC735F10E3ED3F /* Build configuration list for PBXNativeTarget "MacMonitorWidget" */ = {
+		77A70C4283EC735F10E3ED3F /* Build configuration list for PBXNativeTarget "MMetricsWidget" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				5E53A443C86E14995474F627 /* Release */,

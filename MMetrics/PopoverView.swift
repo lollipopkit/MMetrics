@@ -29,29 +29,16 @@ struct PopoverView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
                 Header(model: model, showSettings: $showSettings)
-                if model.helperMissing {
-                    HelperMissingBanner()
-                }
-                sep
-                CPUSection(model: model)
-                sep
-                GPUSection(model: model)
+                SectionIf(.cpu) { CPUSection(model: model) }
+                SectionIf(.gpu) { GPUSection(model: model) }
                 if model.fanRPM > 0 {
-                    sep
-                    FanSection(model: model)
+                    SectionIf(.fan) { FanSection(model: model) }
                 }
-                sep
-                MemorySection(model: model)
-                sep
-                BatterySection(model: model)
-                sep
+                SectionIf(.memory) { MemorySection(model: model) }
+                SectionIf(.battery) { BatterySection(model: model) }
                 NetworkDiskSection(model: model)
-                sep
-                PowerSection(model: model)
-                sep
-                ProcessSection(model: model)
-                sep
-                FooterBar(model: model)
+                SectionIf(.power) { PowerSection(model: model) }
+                SectionIf(.processes) { ProcessSection(model: model) }
             }
         }
         .frame(width: 340)
@@ -62,7 +49,10 @@ struct PopoverView: View {
         }
     }
 
-    private var sep: some View {
+}
+
+private struct SectionSeparator: View {
+    var body: some View {
         Rectangle()
             .fill(Color.primary.opacity(0.08))
             .frame(height: 1)
@@ -70,28 +60,21 @@ struct PopoverView: View {
     }
 }
 
-// MARK: - Helper missing banner
+/// Renders a separator plus `content` only while the section is enabled in Settings.
+private struct SectionIf<Content: View>: View {
+    @AppStorage private var enabled: Bool
+    private let content: Content
 
-private struct HelperMissingBanner: View {
+    init(_ section: DashboardSection, @ViewBuilder content: () -> Content) {
+        _enabled = AppStorage(wrappedValue: true, section.defaultsKey)
+        self.content = content()
+    }
+
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(Color(hex: "FF9F0A"))
-                .font(.system(size: 11))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("System helper not installed")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(Color(hex: "FF9F0A"))
-                Text("Run Install.command from the DMG to enable GPU, temps, and power data.")
-                    .font(.system(size: 10))
-                    .foregroundColor(Color(hex: "888899"))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer()
+        if enabled {
+            SectionSeparator()
+            content
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(hex: "FF9F0A").opacity(0.08))
     }
 }
 
@@ -147,6 +130,15 @@ private struct Header: View {
                 }
             }
             .buttonStyle(.plain)
+            .help("Settings")
+            Button { NSApp.terminate(nil) } label: {
+                Image(systemName: "power")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: "888899"))
+                    .padding(.leading, 10)
+            }
+            .buttonStyle(.plain)
+            .help("Quit MMetrics")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -160,24 +152,16 @@ private struct CPUSection: View {
     var body: some View {
         SectionBox(icon: "cpu", title: "CPU") {
             Row(label: "Overall") { StatBar(pct: model.cpuUsage) }
-            if model.eCoreCount > 0 {
-                Row(label: "E-cluster  \(model.eCoresMHz) MHz") {
-                    StatBar(pct: model.eCoresPct, color: Color(hex: "64D2FF"))
-                }
-                Row(label: "P-cluster  \(model.pCoresMHz) MHz") {
-                    StatBar(pct: model.pCoresPct, color: Color(hex: "BF5AF2"))
-                }
-                // M5+ Super cluster — only shown when present
-                if model.sClusterPct > 0 || model.sClusterMHz > 0 {
-                    Row(label: "S-cluster  \(model.sClusterMHz) MHz") {
-                        StatBar(pct: model.sClusterPct, color: Color(hex: "FF6B6B"))
-                    }
+            ForEach(Array(model.cpuTiers.enumerated()), id: \.offset) { _, tier in
+                let stats = model.clusterStats(tier.kind)
+                Row(label: "\(tier.kind.label)-cluster  \(stats.mhz) MHz") {
+                    StatBar(pct: stats.pct, color: tier.kind.color)
                 }
             }
             if !model.perCoreCPU.isEmpty {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
                     ForEach(Array(model.perCoreCPU.enumerated()), id: \.offset) { i, pct in
-                        CoreTile(index: i, pct: pct, isE: i < model.eCoreCount)
+                        CoreTile(index: i, pct: pct, tint: tierKind(forCore: i).color)
                     }
                 }
                 .padding(.top, 4)
@@ -195,6 +179,33 @@ private struct CPUSection: View {
                      color: Color(hex: "FFD60A"))
             }
             .padding(.top, 2)
+        }
+    }
+
+    private func tierKind(forCore index: Int) -> CPUTier.Kind {
+        var upper = 0
+        for tier in model.cpuTiers {
+            upper += tier.cores
+            if index < upper { return tier.kind }
+        }
+        return model.cpuTiers.last?.kind ?? .performance
+    }
+}
+
+private extension CPUTier.Kind {
+    var label: String {
+        switch self {
+        case .efficiency:  return "E"
+        case .performance: return "P"
+        case .super:       return "S"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .efficiency:  return Color(hex: "64D2FF")
+        case .performance: return Color(hex: "BF5AF2")
+        case .super:       return Color(hex: "FF6B6B")
         }
     }
 }
@@ -248,7 +259,9 @@ private struct MemorySection: View {
                 StatBar(pct: model.memPct, color: Color(hex: "0A84FF"))
             }
             HStack(spacing: 16) {
-                KV("DRAM BW",  String(format: "%.1f GB/s", model.dramBW))
+                if model.dramBWAvailable {
+                    KV("DRAM BW",  String(format: "%.1f GB/s", model.dramBW))
+                }
                 KV("Swap", model.swapTotal > 0
                     ? "\(fmtB(model.swapUsed)) / \(fmtB(model.swapTotal))" : "None")
             }
@@ -311,16 +324,28 @@ private struct BatterySection: View {
 
 private struct NetworkDiskSection: View {
     @ObservedObject var model: SystemStatsModel
+    @AppStorage(DashboardSection.network.defaultsKey) private var showNetwork = true
+    @AppStorage(DashboardSection.disk.defaultsKey)    private var showDisk    = true
+
     var body: some View {
-        HStack(spacing: 0) {
-            SectionBox(icon: "wifi", title: "Network") {
-                IORow(icon: "arrow.down", val: fmtB(model.netInBps)  + "/s", color: Color(hex:"30D158"))
-                IORow(icon: "arrow.up",   val: fmtB(model.netOutBps) + "/s", color: Color(hex:"FF9F0A"))
-            }
-            Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1)
-            SectionBox(icon: "internaldrive", title: "Disk I/O") {
-                IORow(icon: "arrow.down", val: String(format: "%.0f KB/s", model.diskReadKBs),  color: Color(hex:"64D2FF"))
-                IORow(icon: "arrow.up",   val: String(format: "%.0f KB/s", model.diskWriteKBs), color: Color(hex:"FF9F0A"))
+        if showNetwork || showDisk {
+            SectionSeparator()
+            HStack(spacing: 0) {
+                if showNetwork {
+                    SectionBox(icon: "wifi", title: "Network") {
+                        IORow(icon: "arrow.down", val: fmtB(model.netInBps)  + "/s", color: Color(hex:"30D158"))
+                        IORow(icon: "arrow.up",   val: fmtB(model.netOutBps) + "/s", color: Color(hex:"FF9F0A"))
+                    }
+                }
+                if showNetwork && showDisk {
+                    Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1)
+                }
+                if showDisk {
+                    SectionBox(icon: "internaldrive", title: "Disk I/O") {
+                        IORow(icon: "arrow.down", val: String(format: "%.0f KB/s", model.diskReadKBs),  color: Color(hex:"64D2FF"))
+                        IORow(icon: "arrow.up",   val: String(format: "%.0f KB/s", model.diskWriteKBs), color: Color(hex:"FF9F0A"))
+                    }
+                }
             }
         }
     }
@@ -348,8 +373,10 @@ private struct PowerSection: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 5) {
                 PowerTile(label: "CPU",   val: model.cpuPower)
                 PowerTile(label: "GPU",   val: model.gpuPower)
-                PowerTile(label: "ANE",   val: model.anePower)
-                PowerTile(label: "DRAM",  val: model.dramPower)
+                if model.socEnergyAvailable {
+                    PowerTile(label: "ANE",   val: model.anePower)
+                    PowerTile(label: "DRAM",  val: model.dramPower)
+                }
                 PowerTile(label: "SYS",   val: model.sysPower)
                 PowerTile(label: "TOTAL", val: model.totalPower, highlight: true)
             }
@@ -411,42 +438,49 @@ private struct ProcessSection: View {
     }
 }
 
-// MARK: - Footer
+// MARK: - Settings sheet
 
-private struct FooterBar: View {
-    @ObservedObject var model: SystemStatsModel
-    @State private var working = false
+private struct MenuBarToggle: View {
+    let item: MenuBarItem
+    @AppStorage private var enabled: Bool
+
+    init(item: MenuBarItem) {
+        self.item = item
+        _enabled = AppStorage(wrappedValue: false, item.defaultsKey)
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
-            Button {
-                working = true
-                DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) {
-                    model.optimize()
-                    DispatchQueue.main.async { working = false }
-                }
-            } label: {
-                Label(working ? "Working…" : "Optimize", systemImage: "bolt.fill")
-                    .frame(maxWidth: .infinity)
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .buttonStyle(.borderedProminent).tint(Color(hex: "FF9F0A")).disabled(working)
-
-            Button { NSApp.terminate(nil) } label: {
-                Text("Quit").frame(maxWidth: .infinity)
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .buttonStyle(.bordered)
-        }
-        .controlSize(.regular).padding(.horizontal, 14).padding(.vertical, 10)
+        Toggle(item.title, isOn: Binding(
+            get: { enabled },
+            set: { newValue in
+                // Keep the status item clickable: refuse to uncheck the last item.
+                if !newValue && MenuBarItem.enabledItems == [item] { return }
+                enabled = newValue
+            }))
+            .toggleStyle(.checkbox)
+            .font(.system(size: 12))
     }
 }
 
-// MARK: - Settings sheet
+private struct SectionToggle: View {
+    let section: DashboardSection
+    @AppStorage private var enabled: Bool
+
+    init(section: DashboardSection) {
+        self.section = section
+        _enabled = AppStorage(wrappedValue: true, section.defaultsKey)
+    }
+
+    var body: some View {
+        Toggle(section.title, isOn: $enabled)
+            .toggleStyle(.checkbox)
+            .font(.system(size: 12))
+    }
+}
 
 struct SettingsSheet: View {
     @Binding var isPresented: Bool
     @AppStorage("openAtLogin")   var openAtLogin   = false
-    @AppStorage("cpuOnlyMenuBar") var cpuOnlyMenuBar = false
     @AppStorage("appTheme") private var appTheme = AppTheme.automatic.rawValue
     @ObservedObject private var updater = UpdateChecker.shared
 
@@ -456,9 +490,14 @@ struct SettingsSheet: View {
                 .font(.system(size: 16, weight: .bold)).foregroundColor(.primary)
 
             VStack(alignment: .leading, spacing: 6) {
-                Toggle("CPU Percentage Only", isOn: $cpuOnlyMenuBar)
-                    .toggleStyle(SwitchToggleStyle(tint: Color(hex: "30D158")))
-                Text("Show a compact value such as 12% in the menu bar.")
+                Text("Menu Bar")
+                    .font(.system(size: 12, weight: .medium))
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                    GridItem(.flexible(), alignment: .leading)],
+                          alignment: .leading, spacing: 6) {
+                    ForEach(MenuBarItem.allCases) { MenuBarToggle(item: $0) }
+                }
+                Text("At least one item stays selected.")
                     .font(.system(size: 11)).foregroundColor(.secondary)
             }
 
@@ -477,6 +516,19 @@ struct SettingsSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
+                Text("Dashboard")
+                    .font(.system(size: 12, weight: .medium))
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                    GridItem(.flexible(), alignment: .leading)],
+                          alignment: .leading, spacing: 6) {
+                    ForEach(DashboardSection.allCases) { SectionToggle(section: $0) }
+                }
+                Text("Hidden sections are not shown; processes, network, disk and battery also stop sampling.")
+                    .font(.system(size: 11)).foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
                 Toggle("Open at Login", isOn: $openAtLogin)
                     .toggleStyle(SwitchToggleStyle(tint: Color(hex: "30D158")))
                     .onChange(of: openAtLogin) { enabled in
@@ -486,7 +538,7 @@ struct SettingsSheet: View {
                             try? SMAppService.mainApp.unregister()
                         }
                     }
-                Text("Automatically start MacMonitor when you log in.")
+                Text("Automatically start MMetrics when you log in.")
                     .font(.system(size: 11)).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -501,8 +553,8 @@ struct SettingsSheet: View {
                     }
                     .font(.system(size: 11))
                 }
-                Text("Right-click your desktop → Edit Widgets → find MacMonitor. "
-                     + "It refreshes on its own while MacMonitor is running.")
+                Text("Right-click your desktop → Edit Widgets → find MMetrics. "
+                     + "It refreshes on its own while MMetrics is running.")
                     .font(.system(size: 11)).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -511,7 +563,7 @@ struct SettingsSheet: View {
 
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("MacMonitor  v\(updater.currentVersion)")
+                    Text("MMetrics  v\(updater.currentVersion)")
                         .font(.system(size: 11, weight: .semibold)).foregroundColor(.primary)
                     Group {
                         switch updater.updatePhase {
@@ -644,10 +696,9 @@ private struct StatBar: View {
 }
 
 private struct CoreTile: View {
-    let index: Int; let pct: Double; let isE: Bool
+    let index: Int; let pct: Double; let tint: Color
     var color: Color {
-        pct >= 85 ? Color(hex:"FF453A") : pct >= 60 ? Color(hex:"FFD60A")
-            : (isE ? Color(hex:"64D2FF") : Color(hex:"BF5AF2"))
+        pct >= 85 ? Color(hex:"FF453A") : pct >= 60 ? Color(hex:"FFD60A") : tint
     }
     var body: some View {
         HStack(spacing: 5) {

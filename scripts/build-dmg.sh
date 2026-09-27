@@ -1,26 +1,24 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  MacMonitor — DMG Builder
+#  MMetrics — DMG Builder
 #  Creates a drag-to-Applications DMG for distribution
 #  Usage: ./scripts/build-dmg.sh
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-PROJECT="Macmonitor.xcodeproj"
-SCHEME="Macmonitor"
-APP_NAME="Macmonitor"
-# Version resolution order:
-#   1. MACMONITOR_VERSION env var (set by GitHub Actions from the git tag)
-#   2. Latest git tag (strips leading "v")
-#   3. Fallback: 1.0.0
-VERSION="${MACMONITOR_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo '1.0.0')}"
+PROJECT="MMetrics.xcodeproj"
+SCHEME="MMetrics"
+APP_NAME="MMetrics"
+# Version: MMETRICS_VERSION if set, else MARKETING_VERSION from the project.
+VERSION="${MMETRICS_VERSION:-$(sed -n 's/.*MARKETING_VERSION = \(.*\);/\1/p' "$PROJECT/project.pbxproj" | head -1)}"
+[ -n "$VERSION" ] || { echo "Could not determine version"; exit 1; }
 DIST="dist"
 ARCHIVE="$DIST/$APP_NAME.xcarchive"
 EXPORT="$DIST/export"
 STAGING="$DIST/dmg-staging"
 DMG_TEMP="$DIST/temp.dmg"
-DMG_FINAL="$DIST/MacMonitor-$VERSION.dmg"
-VOL_NAME="MacMonitor $VERSION"
+DMG_FINAL="$DIST/MMetrics-$VERSION.dmg"
+VOL_NAME="MMetrics $VERSION"
 
 G='\033[0;32m' B='\033[0;34m' Y='\033[1;33m' R='\033[0;31m'
 W='\033[1;37m' D='\033[2m' NC='\033[0m' BOLD='\033[1m'
@@ -30,7 +28,7 @@ ok()   { printf "  ${G}✓${NC}  %s\n" "$1"; }
 fail() { printf "  ${R}✗${NC}  %s\n" "$1"; exit 1; }
 
 echo ""
-echo -e "${BOLD}${W}  MacMonitor DMG Builder  v${VERSION}${NC}"
+echo -e "${BOLD}${W}  MMetrics DMG Builder  v${VERSION}${NC}"
 echo -e "${D}  ────────────────────────────────────${NC}"
 echo ""
 
@@ -92,19 +90,19 @@ ok "Exported: $(basename "$APP_PATH")"
 
 # ── Build privileged helper and embed it in the app bundle ───────────────────
 # The Homebrew Cask postflight copies this binary out of Contents/MacOS/ into
-# /Users/Shared/MacMonitor and grants it passwordless sudo for SMC + IOReport
-# reads. If it's missing, brew install --cask macmonitor fails with
-#   cp: ...Macmonitor.app/Contents/MacOS/macmonitor-helper: No such file
+# /Users/Shared/MMetrics and grants it passwordless sudo for SMC + IOReport
+# reads. If it's missing, brew install --cask mmetrics fails with
+#   cp: ...MMetrics.app/Contents/MacOS/mmetrics-helper: No such file
 # (see issue #4). Compile from helper/ and drop the binary in alongside the app.
-step "Building macmonitor-helper..."
-HELPER_OUT="$APP_PATH/Contents/MacOS/macmonitor-helper"
+step "Building mmetrics-helper..."
+HELPER_OUT="$APP_PATH/Contents/MacOS/mmetrics-helper"
 clang -fobjc-arc \
     -framework Foundation -framework IOKit \
     -F/System/Library/PrivateFrameworks -lIOReport \
-    -I Macmonitor \
-    helper/macmonitor-helper.m \
-    Macmonitor/IOReportWrapper.m \
-    Macmonitor/SMC.c \
+    -I MMetrics \
+    helper/mmetrics-helper.m \
+    MMetrics/IOReportWrapper.m \
+    MMetrics/SMC.c \
     -o "$HELPER_OUT"
 chmod +x "$HELPER_OUT"
 [ -x "$HELPER_OUT" ] || fail "Helper compile failed — see clang output above"
@@ -117,36 +115,30 @@ ok "Helper embedded: $(basename "$HELPER_OUT")"
 # app extension inside an invalidly signed host — the widget silently never
 # appears in the gallery.
 #
-# Sign inside-out: nested code first, then the outer bundle. Ad-hoc (`-`) matches
-# what releases already shipped; swap in a Developer ID identity here if these
-# ever get notarised.
+# Sign inside-out: nested code first, then the outer bundle.
+# MMETRICS_SIGN_ID unset → ad-hoc (`-`) for local builds. A Developer ID identity
+# (scripts/release.sh) also enables the hardened runtime and a secure timestamp,
+# both required for notarisation.
 step "Signing bundle (inside-out)..."
-SIGN_ID="${MACMONITOR_SIGN_ID:--}"
-
-codesign --force --sign "$SIGN_ID" --timestamp=none "$HELPER_OUT" \
-    || fail "Failed to sign macmonitor-helper"
-
-APPEX="$APP_PATH/Contents/PlugIns/MacMonitorWidget.appex"
-if [ -d "$APPEX" ]; then
-    WIDGET_ENT="$(dirname "$0")/../MacMonitorWidget/MacMonitorWidget.entitlements"
-    if [ -f "$WIDGET_ENT" ]; then
-        codesign --force --sign "$SIGN_ID" --timestamp=none \
-            --entitlements "$WIDGET_ENT" "$APPEX" || fail "Failed to sign widget extension"
-    else
-        codesign --force --sign "$SIGN_ID" --timestamp=none "$APPEX" \
-            || fail "Failed to sign widget extension"
-    fi
-    ok "Signed: MacMonitorWidget.appex"
-fi
-
-APP_ENT="$(dirname "$0")/../Macmonitor/MacMonitor.entitlements"
-if [ -f "$APP_ENT" ]; then
-    codesign --force --sign "$SIGN_ID" --timestamp=none \
-        --entitlements "$APP_ENT" "$APP_PATH" || fail "Failed to sign app bundle"
+SIGN_ID="${MMETRICS_SIGN_ID:--}"
+if [ "$SIGN_ID" = "-" ]; then
+    SIGN_FLAGS=(--force --sign - --timestamp=none)
 else
-    codesign --force --sign "$SIGN_ID" --timestamp=none "$APP_PATH" \
-        || fail "Failed to sign app bundle"
+    SIGN_FLAGS=(--force --sign "$SIGN_ID" --timestamp --options runtime)
 fi
+
+codesign "${SIGN_FLAGS[@]}" "$HELPER_OUT" || fail "Failed to sign mmetrics-helper"
+
+APPEX="$APP_PATH/Contents/PlugIns/MMetricsWidget.appex"
+[ -d "$APPEX" ] || fail "Widget extension missing: $APPEX"
+codesign "${SIGN_FLAGS[@]}" \
+    --entitlements "$(dirname "$0")/../MMetricsWidget/MMetricsWidget.entitlements" \
+    "$APPEX" || fail "Failed to sign widget extension"
+ok "Signed: MMetricsWidget.appex"
+
+codesign "${SIGN_FLAGS[@]}" \
+    --entitlements "$(dirname "$0")/../MMetrics/MMetrics.entitlements" \
+    "$APP_PATH" || fail "Failed to sign app bundle"
 
 codesign --verify --deep --strict "$APP_PATH" \
     || fail "Signature verification failed after re-signing"
@@ -163,13 +155,6 @@ cp -R "$APP_PATH" "$STAGING/"
 
 # Applications symlink — gives users the drag-and-drop target
 ln -s /Applications "$STAGING/Applications"
-
-# Include the quarantine-removal helper script
-SCRIPT_SRC="$(dirname "$0")/../Install.command"
-if [ -f "$SCRIPT_SRC" ]; then
-    cp "$SCRIPT_SRC" "$STAGING/Install.command"
-    chmod +x "$STAGING/Install.command"
-fi
 ok "Staged"
 
 # ── Create DMG ────────────────────────────────────────────────────────────────
@@ -230,6 +215,11 @@ APPLESCRIPT
 fi
 ok "Compressed"
 
+if [ "$SIGN_ID" != "-" ]; then
+    codesign --force --sign "$SIGN_ID" --timestamp "$DMG_FINAL" || fail "Failed to sign DMG"
+    ok "Signed: $(basename "$DMG_FINAL")"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 SIZE=$(du -sh "$DMG_FINAL" | awk '{print $1}')
 echo ""
@@ -237,6 +227,5 @@ echo -e "  ${G}${BOLD}Done!${NC}"
 echo ""
 echo -e "  ${W}Output:${NC}   $DMG_FINAL  (${SIZE})"
 echo ""
-echo -e "  ${D}To release on GitHub:${NC}"
-echo -e "  ${D}  gh release create v${VERSION} \"$DMG_FINAL\" --title \"MacMonitor v${VERSION}\" --notes-file CHANGELOG.md${NC}"
+echo -e "  ${D}To sign, notarise and publish: ./scripts/release.sh <version>${NC}"
 echo ""

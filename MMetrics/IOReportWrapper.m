@@ -5,6 +5,7 @@
 #import <IOKit/hidsystem/IOHIDEventSystemClient.h>
 #import <IOKit/hidsystem/IOHIDServiceClient.h>
 #include <string.h>
+#include <sys/sysctl.h>
 
 typedef struct IOReportSubscriptionRef *IOReportSubscriptionRef;
 extern CFDictionaryRef IOReportCopyChannelsInGroup(CFStringRef group, CFStringRef subgroup, uint64_t a, uint64_t b, uint64_t c);
@@ -44,6 +45,9 @@ static uint32_t gPCoreFreqs[64];
 static int gPCoreFreqCount = 0;
 static uint32_t gMCoreFreqs[64];  // M5+ medium cluster
 static int gMCoreFreqCount = 0;
+// True when the chip exposes a "Super" perf level (M5+). On those chips the
+// IOReport PCPU channel is the Super cluster; on M1-M4 it is the Performance cluster.
+static BOOL gHasSuperTier = NO;
 static char gCpuTempKeys[64][5];
 static int gCpuTempKeyCount = 0;
 static char gGpuTempKeys[64][5];
@@ -93,7 +97,7 @@ static BOOL isValidTemperature(double value) {
 // proximity sensors, not CPU sensors — they sit around 31–33 °C while the Ts0*
 // complex sensors track the cores at 41–51 °C. Averaging them into the CPU
 // figure pulled it roughly 0.7 °C low at idle and further under load, because
-// the SSD sensors barely move while the cores climb. See SENSORS.md.
+// the SSD sensors barely move while the cores climb.
 static BOOL isCPUTemperatureSMCKey(const char *key) {
     if (key[1] == 'p' || key[1] == 'e') {
         return YES;
@@ -335,6 +339,19 @@ static void loadGpuFrequencies(void) {
     IOObjectRelease(iterator);
 }
 
+static BOOL detectSuperTier(void) {
+    int levels = 0;
+    size_t size = sizeof(levels);
+    if (sysctlbyname("hw.nperflevels", &levels, &size, NULL, 0) != 0) { return NO; }
+    for (int i = 0; i < levels; i++) {
+        char key[32], name[32] = {0};
+        snprintf(key, sizeof(key), "hw.perflevel%d.name", i);
+        size = sizeof(name) - 1;
+        if (sysctlbyname(key, name, &size, NULL, 0) == 0 && strcmp(name, "Super") == 0) { return YES; }
+    }
+    return NO;
+}
+
 static double energyToWatts(int64_t energy, CFStringRef unitRef, double durationSeconds) {
     if (durationSeconds <= 0) { return 0; }
 
@@ -448,6 +465,7 @@ static BOOL gAmcStatsProducesData = NO;
 
     loadGpuFrequencies();
     loadCpuFrequencies();
+    gHasSuperTier = detectSuperTier();
 }
 
 + (IOReportData)fetchIOReportData {
@@ -523,6 +541,7 @@ static BOOL gAmcStatsProducesData = NO;
             double watts = energyToWatts(value, IOReportChannelGetUnitLabel(channel), sampleSeconds);
             if (strstr(chn, "CPU Energy") != NULL) {
                 data.cpuPower += watts;
+                if (value > 0) { data.socEnergyAvailable = true; }
             } else if (strcmp(chn, "GPU Energy") == 0) {
                 data.gpuPower += watts;
             } else if (strncmp(chn, "ANE", 3) == 0) {
@@ -558,8 +577,11 @@ static BOOL gAmcStatsProducesData = NO;
                         continue;
                     }
                     activeTime += residency;
-                    if (activeStateIdx < gGpuFreqCount) {
-                        weightedFreq += (double)gGpuFreqs[activeStateIdx] * residency;
+                    // Some chips (M5 Pro) expose more P-states than the pmgr table has
+                    // entries; clamp to the top frequency instead of dropping the residency.
+                    if (gGpuFreqCount > 0) {
+                        int idx = activeStateIdx < gGpuFreqCount ? activeStateIdx : gGpuFreqCount - 1;
+                        weightedFreq += (double)gGpuFreqs[idx] * residency;
                     }
                     activeStateIdx++;
                 }
@@ -601,7 +623,8 @@ static BOOL gAmcStatsProducesData = NO;
                 if (snRef == NULL) continue;
                 char sn[64] = {0};
                 CFStringGetCString(snRef, sn, sizeof(sn), kCFStringEncodingUTF8);
-                if (strcmp(sn, "OFF") == 0 || strcmp(sn, "IDLE") == 0) continue;
+                // DOWN = cluster power-gated (e.g. the second P cluster on M5 Pro at light load).
+                if (strcmp(sn, "OFF") == 0 || strcmp(sn, "IDLE") == 0 || strcmp(sn, "DOWN") == 0) continue;
 
                 activeTime += residency;
 
@@ -651,6 +674,7 @@ static BOOL gAmcStatsProducesData = NO;
             // Skip DCS channels — they are a subset of the total; counting them
             // would double-count bandwidth already captured by other channels.
             if (strstr(chn, "DCS") != NULL) continue;
+            if (gAmcStatsProducesData) { data.dramBandwidthAvailable = true; }
             if (strstr(chn, "RD") != NULL)  { data.dramReadBytes  += value; }
             else if (strstr(chn, "WR") != NULL) { data.dramWriteBytes += value; }
 
@@ -660,6 +684,7 @@ static BOOL gAmcStatsProducesData = NO;
             if (subgroupRef == NULL) continue;
             char sub[64] = {0};
             CFStringGetCString(subgroupRef, sub, sizeof(sub), kCFStringEncodingUTF8);
+            if (strcmp(sub, "DRAM BW") == 0) { data.dramBandwidthAvailable = true; }
             if (strcmp(sub, "DRAM BW") == 0 && value > 0) {
                 if (strstr(chn, "RD") != NULL)       { pmpDramReadBytes  += value; }
                 else if (strstr(chn, "WR") != NULL)  { pmpDramWriteBytes += value; }
@@ -668,27 +693,35 @@ static BOOL gAmcStatsProducesData = NO;
     }
 
     // Post-loop: assign accumulated cluster metrics.
-    // M5+: MCPU → pCluster (Performance tier), PCPU → sCluster (Super tier).
-    // M1-M4: PCPU → pCluster (no mCluster).
+    // Super-tier chips (M5+): MCPU → pCluster (Performance tier), PCPU → sCluster (Super tier).
+    // M1-M4: PCPU → pCluster (no MCPU).
     if (mClusterCount > 0) {
-        // M5+ chip
         data.pClusterActive  = mClusterActiveSum / (double)mClusterCount;
         data.pClusterFreqMHz = mClusterFreqMax;
-        if (hasPCPU) {
-            // PCPU on M5+ is the Super cluster
+    }
+    if (hasPCPU) {
+        if (gHasSuperTier) {
             data.sClusterActive  = pcpuActive;
             data.sClusterFreqMHz = pcpuFreq;
+        } else {
+            data.pClusterActive  = pcpuActive;
+            data.pClusterFreqMHz = pcpuFreq;
         }
-    } else if (hasPCPU) {
-        // M1-M4: PCPU is the Performance cluster
-        data.pClusterActive  = pcpuActive;
-        data.pClusterFreqMHz = pcpuFreq;
     }
 
     // Use PMP DRAM bytes when AMC Stats produced nothing (M5+).
     if (data.dramReadBytes == 0 && data.dramWriteBytes == 0) {
         data.dramReadBytes  = pmpDramReadBytes;
         data.dramWriteBytes = pmpDramWriteBytes;
+    }
+
+    // Some chips (observed: M5 Pro on macOS 27, even as root) zero every Energy Model
+    // channel except GPU Energy. CPU power then comes from SMC PPMC, which tracks
+    // powermetrics "CPU Power" within ~2 W under load but is smoothed and reads
+    // ~2-3 W high near idle. ANE/DRAM stay unavailable.
+    if (!data.socEnergyAvailable && smcConn != 0) {
+        double ppmc = SMCGetFloatValue(smcConn, "PPMC");
+        if (ppmc > 0 && ppmc < 500) { data.cpuPower = ppmc; }
     }
 
     data.cpuTemp = resolveCPUTemperature(smcConn);

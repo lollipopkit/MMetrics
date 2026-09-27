@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct MacMonitorApp: App {
+struct MMetricsApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     var body: some Scene {

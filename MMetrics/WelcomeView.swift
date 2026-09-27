@@ -81,7 +81,7 @@ private struct StepWelcome: View {
                 )
 
             VStack(spacing: 8) {
-                Text("Welcome to MacMonitor")
+                Text("Welcome to MMetrics")
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.primary)
                 Text("Real-time CPU, GPU, memory, battery and power\nmonitoring built for Apple Silicon.")
@@ -144,7 +144,7 @@ private struct StepPermission: View {
             VStack(spacing: 6) {
                 Text("One-time permission")
                     .font(.system(size: 20, weight: .bold)).foregroundColor(.primary)
-                Text("MacMonitor needs sudo once to read GPU, temperature, and power data.")
+                Text("MMetrics needs sudo once to read GPU, temperature, and power data.")
                     .font(.system(size: 12)).foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -161,7 +161,7 @@ private struct StepPermission: View {
             }
             .padding(.horizontal, 36)
 
-            Text("Your sudo password is cached by macOS — MacMonitor never stores it.")
+            Text("Your sudo password is cached by macOS — MMetrics never stores it.")
                 .font(.system(size: 10))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

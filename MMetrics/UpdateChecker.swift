@@ -2,7 +2,7 @@ import Foundation
 import AppKit
 import Combine
 
-// Copyright (c) 2025-2026 MacMonitor Contributors. MIT License.
+// Copyright (c) 2025-2026 MMetrics Contributors. MIT License.
 
 /// Checks GitHub Releases for a newer version and publishes the result.
 /// Singleton — call `UpdateChecker.shared.check()` once at launch.
@@ -10,9 +10,8 @@ final class UpdateChecker: ObservableObject {
 
     static let shared = UpdateChecker()
 
-    // ── Replace ryyansafar with your GitHub username ──────────────────────────
-    private let apiURL = URL(string: "https://api.github.com/repos/ryyansafar/MacMonitor/releases/latest")!
-    private let releasesURL = URL(string: "https://github.com/ryyansafar/MacMonitor/releases/latest")!
+    private let apiURL = URL(string: "https://api.github.com/repos/lollipopkit/mac-power-metric/releases/latest")!
+    private let releasesURL = URL(string: "https://github.com/lollipopkit/mac-power-metric/releases/latest")!
 
     @Published private(set) var updateAvailable   = false
     @Published private(set) var latestVersion     = ""
@@ -35,7 +34,7 @@ final class UpdateChecker: ObservableObject {
     func check() {
         var request = URLRequest(url: apiURL)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("MacMonitor/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue("MMetrics/\(currentVersion)", forHTTPHeaderField: "User-Agent")
 
         URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
             guard let self,
@@ -58,8 +57,8 @@ final class UpdateChecker: ObservableObject {
     func startUpdate() {
         guard updateAvailable, !latestVersion.isEmpty else { return }
         let version = latestVersion
-        let dmgName = "MacMonitor-\(version).dmg"
-        guard let url = URL(string: "https://github.com/ryyansafar/MacMonitor/releases/download/v\(version)/\(dmgName)") else { return }
+        let dmgName = "MMetrics-\(version).dmg"
+        guard let url = URL(string: "https://github.com/lollipopkit/mac-power-metric/releases/download/v\(version)/\(dmgName)") else { return }
 
         updatePhase = .downloading
         downloadFraction = 0
@@ -88,7 +87,7 @@ final class UpdateChecker: ObservableObject {
     }
 
     func relaunch() {
-        NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/MacMonitor.app"))
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/MMetrics.app"))
         NSApp.terminate(nil)
     }
 
@@ -130,7 +129,7 @@ final class UpdateChecker: ObservableObject {
             detach(mountPoint); fail("App not found in update package"); return
         }
         let srcApp  = (mountPoint as NSString).appendingPathComponent(appName)
-        let destApp = "/Applications/MacMonitor.app"
+        let destApp = "/Applications/MMetrics.app"
 
         // Replace app and strip quarantine — prompts for admin password if needed
         let script = "do shell script \"rm -rf '\(destApp)' && cp -R '\(srcApp)' '\(destApp)' && xattr -dr com.apple.quarantine '\(destApp)'\" with administrator privileges"

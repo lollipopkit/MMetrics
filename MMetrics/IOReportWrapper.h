@@ -21,6 +21,8 @@ typedef struct {
     int64_t dramReadBytes;
     int64_t dramWriteBytes;
     int32_t fanRPM;         // RPM — Fan 0 actual speed (SMC F0Ac); 0 on fanless models
+    bool   socEnergyAvailable; // false when IOReport "Energy Model" CPU/ANE/DRAM counters read 0 (M5 Pro, macOS 27)
+    bool   dramBandwidthAvailable; // false when neither AMC Stats nor PMP "DRAM BW" byte counters exist
 } IOReportData;
 
 @interface IOReportWrapper : NSObject

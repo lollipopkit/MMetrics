@@ -21,43 +21,31 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     // Subscribe to model changes so the label updates in sync with each tick,
     // not on a separate independent timer that may fire before data is ready.
     private var cancellables = Set<AnyCancellable>()
-    private var lastCPU = 0
-    private var lastMem = 0
-    private var lastTemp = 0.0
-    private var isCPUOnlyMenuBar = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         UserDefaults.standard.register(defaults: [
-            "cpuOnlyMenuBar": false,
             "appTheme": AppTheme.automatic.rawValue
-        ])
-        isCPUOnlyMenuBar = UserDefaults.standard.bool(forKey: "cpuOnlyMenuBar")
+        ].merging(DashboardSection.registrationDefaults) { $1 }
+         .merging(MenuBarItem.registrationDefaults) { $1 })
 
         setupMenuBar()
         model.startMonitoring()
 
-        // Drive the label from published model values — fires immediately on change
-        Publishers.CombineLatest3(model.$cpuUsage, model.$memPct, model.$cpuTemp)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] cpu, mem, temp in
-                self?.lastCPU = cpu
-                self?.lastMem = mem
-                self?.lastTemp = temp
-                self?.updateLabel(cpu: cpu, mem: mem, temp: temp)
+        // Redraw the label once per batch of model updates. objectWillChange fires
+        // before each property is set, so debounce until the tick's writes land.
+        model.objectWillChange
+            .debounce(for: .milliseconds(50), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateLabel()
                 self?.refreshWidgetsIfDue()
             }
             .store(in: &cancellables)
 
+        // Menu bar item selection changed in Settings.
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                let isCPUOnly = UserDefaults.standard.bool(forKey: "cpuOnlyMenuBar")
-                guard isCPUOnly != self.isCPUOnlyMenuBar else { return }
-                self.isCPUOnlyMenuBar = isCPUOnly
-                self.updateLabel(cpu: self.lastCPU, mem: self.lastMem, temp: self.lastTemp)
-            }
+            .sink { [weak self] _ in self?.updateLabel() }
             .store(in: &cancellables)
 
         // Restore Open at Login state on launch
@@ -83,8 +71,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     private func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let btn = statusItem?.button {
-            btn.title  = "🟢 CPU --%  MEM --%"
-            btn.toolTip = "MacMonitor"
+            btn.imagePosition = .imageOnly
+            btn.toolTip = "MMetrics"
+            updateLabel()
             btn.target = self
             btn.action = #selector(handleClick)
             btn.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -99,18 +88,41 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         )
     }
 
-    private func updateLabel(cpu: Int, mem: Int, temp: Double) {
+    private func updateLabel() {
         guard let btn = statusItem?.button else { return }
-        if isCPUOnlyMenuBar {
-            btn.title = "\(cpu)%"
-            btn.toolTip = "CPU usage: \(cpu)%"
-            return
+        let items = MenuBarItem.enabledItems
+        // Settings keep at least one item checked; fall back to CPU so the item stays clickable.
+        let cells = (items.isEmpty ? [.cpu] : items).map(menuBarCell)
+        btn.image = MenuBarLabel.image(for: cells)
+        btn.setAccessibilityLabel(cells.map { "\($0.label) \($0.value)" }.joined(separator: ", "))
+    }
+
+    private func menuBarCell(_ item: MenuBarItem) -> MenuBarLabel.Cell {
+        let value: String, widest: String
+        switch item {
+        case .cpu:         (value, widest) = ("\(model.cpuUsage)%", "99%")
+        case .memory:      (value, widest) = ("\(model.memPct)%", "99%")
+        case .gpu:         (value, widest) = ("\(model.gpuUsage)%", "99%")
+        case .temperature:
+            value  = model.cpuTemp > 0 ? String(format: "%.0f°C", model.cpuTemp) : "--"
+            widest = "99°C"
+        case .power:
+            value  = model.sysPower > 0 ? String(format: "%.0fW", model.sysPower) : "--"
+            widest = "99W"
+        case .netDown:     (value, widest) = (Self.compactRate(model.netInBps), "999K")
+        case .netUp:       (value, widest) = (Self.compactRate(model.netOutBps), "999K")
         }
-        btn.toolTip = "MacMonitor"
-        let dot = cpu >= 85 || mem >= 85 ? "🔴"
-                : cpu >= 60 || mem >= 60 ? "🟡" : "🟢"
-        let tempStr = temp > 0 ? String(format: " %.0f°", temp) : ""
-        btn.title = "\(dot) CPU \(cpu)%\(tempStr)  MEM \(mem)%"
+        return MenuBarLabel.Cell(value: value, label: item.caption, widest: widest)
+    }
+
+    /// Bytes per second in at most four characters, e.g. "0K", "512K", "1.2M", "34M".
+    private static func compactRate(_ bps: Int64) -> String {
+        let kb = Double(bps) / 1024
+        if kb < 999.5 { return String(format: "%.0fK", kb) }
+        let mb = kb / 1024
+        if mb < 9.95 { return String(format: "%.1fM", mb) }
+        if mb < 999.5 { return String(format: "%.0fM", mb) }
+        return String(format: "%.1fG", mb / 1024)
     }
 
     // MARK: - Click handling
@@ -289,7 +301,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         menu.addItem(NSMenuItem(title: "Settings…",
                                 action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit MacMonitor",
+        menu.addItem(NSMenuItem(title: "Quit MMetrics",
                                 action: #selector(NSApp.terminate(_:)), keyEquivalent: "q"))
         statusItem?.menu = menu
         statusItem?.button?.performClick(nil)
@@ -336,7 +348,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             backing:      .buffered,
             defer:        false
         )
-        win.title                      = "MacMonitor Settings"
+        win.title                      = "MMetrics Settings"
         win.titlebarAppearsTransparent = true
         // Adaptive so the window tracks the chosen appearance (#14) rather than
         // being pinned to a dark hex value.
@@ -365,5 +377,65 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         settingsWin = win
+    }
+}
+
+// MARK: - Menu bar label
+
+/// Two-row menu bar label: a bold value above a small caption, cells split by thin
+/// dividers. Rendered as a template image so it follows the menu bar appearance.
+private enum MenuBarLabel {
+    struct Cell {
+        let value: String
+        let label: String
+        /// Typical widest value; keeps the cell width stable as digits change.
+        /// Rarer wider values (e.g. "100%") grow the cell.
+        let widest: String
+    }
+
+    private static let height: CGFloat = 22
+    private static let cellPadding: CGFloat = 5
+    private static let valueAttrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 11.5, weight: .medium),
+        .foregroundColor: NSColor.black,
+    ]
+    private static let labelAttrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 7, weight: .medium),
+        .foregroundColor: NSColor.black,
+    ]
+
+    static func image(for cells: [Cell]) -> NSImage {
+        let widths = cells.map { cell in
+            [NSAttributedString(string: cell.widest, attributes: valueAttrs),
+             NSAttributedString(string: cell.value, attributes: valueAttrs),
+             NSAttributedString(string: cell.label, attributes: labelAttrs)]
+                .map { $0.size().width }.max()!
+                .rounded(.up) + cellPadding * 2
+        }
+        let size = NSSize(width: widths.reduce(0, +), height: height)
+
+        let image = NSImage(size: size, flipped: true) { _ in
+            var x: CGFloat = 0
+            for (i, cell) in cells.enumerated() {
+                let w = widths[i]
+                if i > 0 {
+                    NSColor.black.withAlphaComponent(0.75).setFill()
+                    NSRect(x: x - 0.5, y: 3, width: 1, height: height - 6).fill()
+                }
+                drawCentered(cell.value, attrs: valueAttrs, x: x, width: w, y: 0.5)
+                drawCentered(cell.label, attrs: labelAttrs, x: x, width: w, y: 12.5)
+                x += w
+            }
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    private static func drawCentered(_ text: String, attrs: [NSAttributedString.Key: Any],
+                                     x: CGFloat, width: CGFloat, y: CGFloat) {
+        let str = NSAttributedString(string: text, attributes: attrs)
+        let w = str.size().width
+        str.draw(at: NSPoint(x: x + (width - w) / 2, y: y))
     }
 }
