@@ -9,8 +9,8 @@
 #   brew upgrade --cask mmetrics
 
 cask "mmetrics" do
-  version "1.0.0"
-  sha256 "74b9347d0be3470fceb95cb98a6991ce80b3ef130f41a052e492f8bc1a446b4b"
+  version "1.1.0"
+  sha256 "0b4f38a0ca9a47d5f943d9f18889ed93cfbb5d20895f96645b76176cac20059e"
 
   url "https://github.com/lollipopkit/MMetrics/releases/download/v#{version}/MMetrics-#{version}.dmg"
   name "MMetrics"
