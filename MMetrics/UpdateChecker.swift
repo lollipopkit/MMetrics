@@ -10,8 +10,8 @@ final class UpdateChecker: ObservableObject {
 
     static let shared = UpdateChecker()
 
-    private let apiURL = URL(string: "https://api.github.com/repos/lollipopkit/mac-power-metric/releases/latest")!
-    private let releasesURL = URL(string: "https://github.com/lollipopkit/mac-power-metric/releases/latest")!
+    private let apiURL = URL(string: "https://api.github.com/repos/lollipopkit/MMetrics/releases/latest")!
+    private let releasesURL = URL(string: "https://github.com/lollipopkit/MMetrics/releases/latest")!
 
     @Published private(set) var updateAvailable   = false
     @Published private(set) var latestVersion     = ""
@@ -58,7 +58,7 @@ final class UpdateChecker: ObservableObject {
         guard updateAvailable, !latestVersion.isEmpty else { return }
         let version = latestVersion
         let dmgName = "MMetrics-\(version).dmg"
-        guard let url = URL(string: "https://github.com/lollipopkit/mac-power-metric/releases/download/v\(version)/\(dmgName)") else { return }
+        guard let url = URL(string: "https://github.com/lollipopkit/MMetrics/releases/download/v\(version)/\(dmgName)") else { return }
 
         updatePhase = .downloading
         downloadFraction = 0

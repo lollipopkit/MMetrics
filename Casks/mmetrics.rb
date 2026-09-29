@@ -2,7 +2,7 @@
 # Hosted directly in the MMetrics repo — no separate tap repo needed.
 #
 # Install:
-#   brew tap lollipopkit/mmetrics https://github.com/lollipopkit/mac-power-metric
+#   brew tap lollipopkit/mmetrics https://github.com/lollipopkit/MMetrics
 #   brew install --cask mmetrics
 #
 # Upgrade (after a new GitHub Release is published):
@@ -12,10 +12,10 @@ cask "mmetrics" do
   version "1.0.0"
   sha256 "74b9347d0be3470fceb95cb98a6991ce80b3ef130f41a052e492f8bc1a446b4b"
 
-  url "https://github.com/lollipopkit/mac-power-metric/releases/download/v#{version}/MMetrics-#{version}.dmg"
+  url "https://github.com/lollipopkit/MMetrics/releases/download/v#{version}/MMetrics-#{version}.dmg"
   name "MMetrics"
   desc "Real-time Apple Silicon system monitor — menu bar app and desktop widget"
-  homepage "https://github.com/lollipopkit/mac-power-metric"
+  homepage "https://mmetrics.lollipopkit.com"
 
   # Apple Silicon only — M1 through M5+, macOS 13 Ventura and later
   depends_on macos: ">= :ventura"

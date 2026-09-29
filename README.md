@@ -1,14 +1,15 @@
 <div align="center">
 
-<img src="MMetrics/Assets.xcassets/logo.svg" alt="MMetrics Logo" width="100" />
+<img src="assets/icon/icon.svg" alt="MMetrics icon" width="128" />
 
 # MMetrics
+
+[mmetrics.lollipopkit.com](https://mmetrics.lollipopkit.com)
 
 Apple Silicon system monitor for the menu bar — CPU, GPU, memory, power, temperatures,
 fan, battery, network and disk, read from native macOS interfaces (SMC, IOReport, Mach).
 
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-black?logo=apple&logoColor=white)](https://www.apple.com/macos/)
-[![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%E2%80%93M5-ff6b35?logo=apple&logoColor=white)](https://www.apple.com/mac/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-888899.svg)](LICENSE)
 
 <img src="assets/screenshots/menubar.png" alt="Menu bar" width="320"/>
@@ -32,7 +33,6 @@ fan, battery, network and disk, read from native macOS interfaces (SMC, IOReport
   | Memory | Used / total · swap · DRAM bandwidth (when the chip exposes it) |
   | Battery | Charge · status · adapter / charge watts · cycles · health · capacity · temperature |
   | Network / Disk I/O | Download / upload · read / write throughput |
-  | Power rails | CPU · GPU · ANE / DRAM (when available) · system · total |
   | Top Processes | Top CPU consumers with memory |
 
 - **Desktop widget** — small and medium sizes with CPU, memory and thermal state.
@@ -41,7 +41,7 @@ fan, battery, network and disk, read from native macOS interfaces (SMC, IOReport
 ## Install
 
 ```bash
-brew tap lollipopkit/mmetrics https://github.com/lollipopkit/mac-power-metric
+brew tap lollipopkit/mmetrics https://github.com/lollipopkit/MMetrics
 brew install --cask mmetrics
 ```
 
@@ -65,8 +65,8 @@ samples IOReport and SMC as root. The app works without it.
 Xcode 15+, macOS 13+, Apple Silicon.
 
 ```bash
-git clone https://github.com/lollipopkit/mac-power-metric.git
-cd mac-power-metric
+git clone https://github.com/lollipopkit/MMetrics.git
+cd MMetrics
 open MMetrics.xcodeproj          # set your Team for MMetrics and MMetricsWidget
 ./scripts/build-dmg.sh           # ad-hoc signed DMG in dist/, helper embedded
 ```
@@ -81,7 +81,7 @@ the keychain and `xcrun notarytool store-credentials mmetrics-notary`.
 | Mac | Chip |
 |-----|------|
 | MacBook Air (2022) | M2 |
-| — | M5 Pro |
+| MacBook Pro (2026) | M5 Pro |
 
 Reports from other chips are welcome.
 
