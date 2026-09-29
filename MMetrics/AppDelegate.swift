@@ -4,15 +4,15 @@ import Combine
 import ServiceManagement
 import WidgetKit
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     var statusItem: NSStatusItem?
-    var popover    = NSPopover()
+    private var panel: DashboardPanel!
     var welcomeWin: NSWindow?
     var settingsWin: NSWindow?
     let model      = SystemStatsModel()
 
-    // Anchor tracking for the popover — see beginTrackingAnchor(_:).
+    // Anchor tracking for the dashboard panel — see beginTrackingAnchor(_:).
     private var anchorObservers: [NSObjectProtocol] = []
     private var anchorOrigin: NSPoint?
     private var outsideClickMonitor: Any?
@@ -79,13 +79,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
             btn.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
-        popover.contentSize = NSSize(width: 340, height: 640)
-        popover.behavior    = .transient
-        popover.animates    = true
-        popover.delegate    = self
-        popover.contentViewController = NSHostingController(
-            rootView: PopoverView(model: model)
-        )
+        panel = DashboardPanel(rootView: PopoverView(model: model))
+        panel.onCancel = { [weak self] in self?.closePanel() }
     }
 
     private func updateLabel() {
@@ -131,29 +126,34 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         if NSApp.currentEvent?.type == .rightMouseUp {
             showContextMenu()
         } else {
-            togglePopover(sender)
+            togglePanel(sender)
         }
     }
 
-    func togglePopover(_ sender: NSStatusBarButton) {
-        if popover.isShown {
-            popover.performClose(nil)
-        } else {
-            popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
+    func togglePanel(_ sender: NSStatusBarButton) {
+        if panel.isVisible {
+            closePanel()
+        } else if let anchor = sender.window {
+            panel.show(below: anchor.frame)
+            sender.highlight(true)
             beginTrackingAnchor(sender)
         }
     }
 
+    private func closePanel() {
+        guard panel.isVisible else { return }
+        panel.orderOut(nil)
+        statusItem?.button?.highlight(false)
+        endTrackingAnchor()
+    }
+
     // MARK: - Anchor tracking
 
-    /// The popover is positioned relative to the status item button. In native
-    /// full-screen mode the menu bar auto-hides, which slides the button's window
-    /// off the top of the screen. AppKit keeps the popover attached to that anchor,
-    /// so it flashes and lands in the top-right corner with its top edge clipped.
+    /// The panel is positioned below the status item button. In native full-screen
+    /// mode the menu bar auto-hides, which slides the button's window off the top of
+    /// the screen, leaving the panel detached from its anchor.
     ///
-    /// Rather than fight AppKit's positioning, dismiss the popover as soon as the
-    /// anchor stops being a valid thing to point at.
+    /// Dismiss the panel as soon as the anchor stops being a valid thing to point at.
     private func beginTrackingAnchor(_ button: NSStatusBarButton) {
         endTrackingAnchor()
 
@@ -183,22 +183,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // Collapse when the user clicks anything outside the dashboard, the same way
         // clicking the menu bar icon again collapses it.
         //
-        // NSPopover.behavior = .transient is supposed to do this, but the app runs as
-        // .accessory: a click in another application is delivered to that application
-        // and never reaches us, so the popover just sits there. A global monitor sees
-        // those events. It deliberately does not fire for clicks inside our own
-        // windows — global monitors only observe events routed to other apps — so
-        // interacting with the dashboard itself won't dismiss it, and clicking the menu
-        // bar icon still goes through togglePopover.
+        // The app runs as .accessory: a click in another application is delivered to
+        // that application and never reaches us. A global monitor sees those events;
+        // it does not fire for clicks inside the dashboard itself.
+        //
+        // Clicks on the status item are skipped: on recent macOS the global monitor
+        // sees them too, so the mouse-down would close the panel and the mouse-up's
+        // togglePanel would reopen it, which flickers. togglePanel handles those.
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] _ in
-            self?.dismissPopoverSoon()
+        ) { [weak self, weak anchorWindow] _ in
+            if anchorWindow?.frame.contains(NSEvent.mouseLocation) == true { return }
+            self?.dismissPanelSoon()
         }
     }
 
     private func closeIfAnchorInvalid(_ anchorWindow: NSWindow) {
-        guard popover.isShown else { return }
+        guard panel.isVisible else { return }
 
         // Only a *vertical* move means the menu bar itself retracted.
         //
@@ -206,34 +207,29 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         // on every metrics tick, so the label's width changes whenever a value gains or
         // loses a digit. Menu bar items are laid out from the right, so a width change
         // shifts the anchor window's origin.x — which is not a reason to dismiss.
-        // Comparing the full origin here closed the popover roughly once a second and
+        // Comparing the full origin here closed the dashboard roughly once a second and
         // made the dashboard impossible to interact with.
         if let origin = anchorOrigin, abs(anchorWindow.frame.origin.y - origin.y) > 1 {
-            dismissPopoverSoon()
+            dismissPanelSoon()
             return
         }
 
         // Anchor left its screen entirely — nothing valid to point at. Deliberately
         // checks for *no* intersection rather than full containment, so a status item
-        // that is merely clipped by a crowded menu bar doesn't dismiss the popover.
+        // that is merely clipped by a crowded menu bar doesn't dismiss the panel.
         if let screen = anchorWindow.screen, !screen.frame.intersects(anchorWindow.frame) {
-            dismissPopoverSoon()
+            dismissPanelSoon()
         }
     }
 
-    /// Closes the popover on a later runloop pass rather than inline.
+    /// Closes the panel on a later runloop pass rather than inline.
     ///
-    /// Both triggers here are window-geometry notifications, which AppKit posts from
-    /// inside a CoreAnimation transaction. Tearing the popover down synchronously at
-    /// that point re-enters window animation teardown and can over-release
-    /// `_NSWindowTransformAnimation`, which showed up as an EXC_BAD_ACCESS in
-    /// `objc_release` under `CA::Context::commit_transaction`. Deferring lets the
-    /// current transaction finish before the popover goes away.
-    private func dismissPopoverSoon() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.popover.isShown else { return }
-            self.popover.performClose(nil)
-        }
+    /// The geometry triggers are window notifications, which AppKit posts from inside
+    /// a CoreAnimation transaction; tearing a window down synchronously there has
+    /// crashed in `CA::Context::commit_transaction`. Deferring lets the current
+    /// transaction finish first.
+    private func dismissPanelSoon() {
+        DispatchQueue.main.async { [weak self] in self?.closePanel() }
     }
 
     private func endTrackingAnchor() {
@@ -278,12 +274,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    // MARK: - NSPopoverDelegate
-
-    func popoverDidClose(_ notification: Notification) {
-        endTrackingAnchor()
-    }
-
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
@@ -297,7 +287,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
     func showContextMenu() {
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Open Dashboard",
-                                action: #selector(openPopover), keyEquivalent: ""))
+                                action: #selector(openPanel), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Settings…",
                                 action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
@@ -308,8 +298,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowD
         statusItem?.menu = nil
     }
 
-    @objc func openPopover() {
-        if let btn = statusItem?.button { togglePopover(btn) }
+    @objc func openPanel() {
+        if let btn = statusItem?.button { togglePanel(btn) }
     }
 
     // MARK: - Welcome window
@@ -437,5 +427,54 @@ private enum MenuBarLabel {
         let str = NSAttributedString(string: text, attributes: attrs)
         let w = str.size().width
         str.draw(at: NSPoint(x: x + (width - w) / 2, y: y))
+    }
+}
+
+// MARK: - Dashboard panel
+
+/// Borderless panel hanging below the status item. Replaces NSPopover, whose anchor
+/// arrow cannot be hidden through public API.
+final class DashboardPanel: NSPanel {
+    private static let size = NSSize(width: 340, height: 640)
+    private static let gap: CGFloat = 4
+    private static let cornerRadius: CGFloat = 10
+
+    var onCancel: (() -> Void)?
+
+    init<Content: View>(rootView: Content) {
+        super.init(contentRect: NSRect(origin: .zero, size: Self.size),
+                   styleMask: [.borderless, .nonactivatingPanel],
+                   backing: .buffered, defer: true)
+        level = .popUpMenu
+        collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        isReleasedWhenClosed = false
+
+        let hosting = NSHostingView(rootView: rootView)
+        hosting.wantsLayer = true
+        hosting.layer?.cornerRadius = Self.cornerRadius
+        hosting.layer?.cornerCurve = .continuous
+        hosting.layer?.masksToBounds = true
+        contentView = hosting
+    }
+
+    override var canBecomeKey: Bool { true }
+
+    /// Esc closes the panel.
+    override func cancelOperation(_ sender: Any?) { onCancel?() }
+
+    /// Centers the panel under `anchor` (screen coordinates), kept inside the screen.
+    func show(below anchor: NSRect) {
+        let screen = NSScreen.screens.first { $0.frame.intersects(anchor) } ?? NSScreen.main
+        let bounds = screen?.visibleFrame ?? anchor
+        let height = min(Self.size.height, anchor.minY - Self.gap - bounds.minY)
+        var x = anchor.midX - Self.size.width / 2
+        x = min(max(x, bounds.minX + Self.gap), bounds.maxX - Self.size.width - Self.gap)
+        setFrame(NSRect(x: x, y: anchor.minY - Self.gap - height,
+                        width: Self.size.width, height: height), display: true)
+        makeKeyAndOrderFront(nil)
+        invalidateShadow()
     }
 }
