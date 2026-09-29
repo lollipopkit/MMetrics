@@ -53,6 +53,35 @@ static int gCpuTempKeyCount = 0;
 static char gGpuTempKeys[64][5];
 static int gGpuTempKeyCount = 0;
 
+// IOReport core-channel prefixes: ECPU = efficiency, MCPU = M5+ performance,
+// PCPU = performance (M1-M4) or super (M5+), SCPU = super.
+enum { CoreTierE, CoreTierM, CoreTierP, CoreTierS, CoreTierCount };
+
+static int coreTierForChannel(const char *chn) {
+    if (strncmp(chn, "ECPU", 4) == 0) return CoreTierE;
+    if (strncmp(chn, "MCPU", 4) == 0) return CoreTierM;
+    if (strncmp(chn, "PCPU", 4) == 0) return CoreTierP;
+    if (strncmp(chn, "SCPU", 4) == 0) return CoreTierS;
+    return -1;
+}
+
+static BOOL isInactiveState(CFStringRef name) {
+    // DOWN = power-gated (e.g. the second P cluster on M5 Pro at light load).
+    return CFEqual(name, CFSTR("OFF")) || CFEqual(name, CFSTR("IDLE")) || CFEqual(name, CFSTR("DOWN"));
+}
+
+static double activeResidencyPct(CFDictionaryRef channel) {
+    int64_t total = 0, active = 0;
+    int32_t n = IOReportStateGetCount(channel);
+    for (int32_t s = 0; s < n; s++) {
+        int64_t residency = IOReportStateGetResidency(channel, s);
+        total += residency;
+        CFStringRef name = IOReportStateGetNameForIndex(channel, s);
+        if (name != NULL && !isInactiveState(name)) { active += residency; }
+    }
+    return total > 0 ? 100.0 * (double)active / (double)total : 0;
+}
+
 extern IOHIDEventSystemClientRef IOHIDEventSystemClientCreate(CFAllocatorRef allocator);
 
 static IOHIDEventSystemClientRef getHIDClient(void) {
@@ -516,6 +545,11 @@ static BOOL gAmcStatsProducesData = NO;
     double pcpuActive        = 0;
     int    pcpuFreq          = 0;
     BOOL   hasPCPU           = NO;
+    // Per-core active residency sums, indexed by CoreTier. Cluster (complex) residency is
+    // the time any core in the cluster is active, so it overstates utilization; the tier
+    // percentage is the mean of its cores instead.
+    double coreActiveSum[CoreTierCount] = {0};
+    int    coreCount[CoreTierCount]     = {0};
     // PMP DRAM bandwidth (M5+ fallback)
     int64_t pmpDramReadBytes  = 0;
     int64_t pmpDramWriteBytes = 0;
@@ -599,6 +633,13 @@ static BOOL gAmcStatsProducesData = NO;
             if (subgroupRef == NULL) continue;
             char sub[64] = {0};
             CFStringGetCString(subgroupRef, sub, sizeof(sub), kCFStringEncodingUTF8);
+            if (strcmp(sub, "CPU Core Performance States") == 0) {
+                int tier = coreTierForChannel(chn);
+                if (tier < 0) continue;
+                coreActiveSum[tier] += activeResidencyPct(channel);
+                coreCount[tier]++;
+                continue;
+            }
             if (strcmp(sub, "CPU Complex Performance States") != 0) continue;
 
             // Guard MCPU before testing CPU0/CPU1 — "MCPU0" contains "CPU0" and would
@@ -620,11 +661,9 @@ static BOOL gAmcStatsProducesData = NO;
                 totalTime += residency;
 
                 CFStringRef snRef = IOReportStateGetNameForIndex(channel, s);
-                if (snRef == NULL) continue;
+                if (snRef == NULL || isInactiveState(snRef)) continue;
                 char sn[64] = {0};
                 CFStringGetCString(snRef, sn, sizeof(sn), kCFStringEncodingUTF8);
-                // DOWN = cluster power-gated (e.g. the second P cluster on M5 Pro at light load).
-                if (strcmp(sn, "OFF") == 0 || strcmp(sn, "IDLE") == 0 || strcmp(sn, "DOWN") == 0) continue;
 
                 activeTime += residency;
 
@@ -707,6 +746,14 @@ static BOOL gAmcStatsProducesData = NO;
             data.pClusterActive  = pcpuActive;
             data.pClusterFreqMHz = pcpuFreq;
         }
+    }
+    // Prefer per-core means; the complex residency above remains the fallback.
+    if (coreCount[CoreTierE] > 0) { data.eClusterActive = coreActiveSum[CoreTierE] / coreCount[CoreTierE]; }
+    if (coreCount[CoreTierM] > 0) { data.pClusterActive = coreActiveSum[CoreTierM] / coreCount[CoreTierM]; }
+    if (coreCount[CoreTierS] > 0) { data.sClusterActive = coreActiveSum[CoreTierS] / coreCount[CoreTierS]; }
+    if (coreCount[CoreTierP] > 0) {
+        double pct = coreActiveSum[CoreTierP] / coreCount[CoreTierP];
+        if (gHasSuperTier) { data.sClusterActive = pct; } else { data.pClusterActive = pct; }
     }
 
     // Use PMP DRAM bytes when AMC Stats produced nothing (M5+).
